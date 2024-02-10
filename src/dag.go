@@ -3,173 +3,160 @@
 // check if a task should be canceled, cancel dependent tasks, and create an execution plan. The topsort
 // package is used to create and manipulate the DAG.
 
-// Please replace taskCollection := []map[string]interface{}{} and reverse := false with your actual task
+// Please replace TaskCollection := []map[string]interface{}{} and reverse := false with your actual task
 // collection and reverse flag.
 
 // Remember that error handling in Go is explicit, and it’s a good practice to always check for errors
 // where they can occur.
 
-
-
 package main
 
-import (
-	"fmt"
-	"github.com/stevenle/topsort"
-)
-
 type DAG struct {
-	TaskCollection       []map[string]interface{}
-	Reverse              bool
-	Dag                  *topsort.Graph
-	DependencyTree       map[string][]string
-	ToBeCanceled         map[string]bool
-	FinishedTasksStatus  map[string]map[string]bool
-	ExecutionPlan        map[string]map[string]interface{}
+	taskCollection      []map[string]interface{}
+	reverse             bool
+	sorter              *TopologicalSorter
+	dependencyTree      map[string][]string
+	toBeCanceled        map[string]struct{}
+	finishedTasksStatus map[string]map[string]struct{}
+	executionPlan       map[string]interface{}
 }
 
 func NewDAG(taskCollection []map[string]interface{}, reverse bool) *DAG {
-	dag := topsort.NewGraph()
-	dependencyTree := make(map[string][]string)
-	for _, task := range taskCollection {
-		taskName := task["task"].(string)
-		dependencies := task["depends-on"].([]interface{})
-		for _, dependency := range dependencies {
-			if reverse {
-				dag.AddEdge(dependency.(string), taskName)
-			} else {
-				dag.AddEdge(taskName, dependency.(string))
-			}
-			dependencyTree[taskName] = append(dependencyTree[taskName], dependency.(string))
-		}
+	d := &DAG{
+		taskCollection: taskCollection,
+		reverse:        reverse,
+		toBeCanceled:   make(map[string]struct{}),
+		finishedTasksStatus: map[string]map[string]struct{}{
+			"failed":     {},
+			"canceled":   {},
+			"successful": {},
+		},
 	}
-	finishedTasksStatus := map[string]map[string]bool{
-		"failed":     make(map[string]bool),
-		"canceled":   make(map[string]bool),
-		"successful": make(map[string]bool),
-	}
-	executionPlan := createExecutionPlan(dependencyTree)
-	return &DAG{
-		TaskCollection:      taskCollection,
-		Reverse:             reverse,
-		Dag:                 dag,
-		DependencyTree:      dependencyTree,
-		ToBeCanceled:        make(map[string]bool),
-		FinishedTasksStatus: finishedTasksStatus,
-		ExecutionPlan:       executionPlan,
-	}
+	d.sorter, d.dependencyTree = d.buildDAG()
+	d.executionPlan = d.createExecutionPlan(d.dependencyTree)
+	d.sorter.prepare()
+	return d
 }
 
 func (d *DAG) IsActive() bool {
-	return len(d.Dag.Ready()) > 0
+	return d.sorter.isActive()
 }
 
 func (d *DAG) GetAvailableTasks() []string {
-	return d.Dag.Ready()
+	return d.sorter.getReady()
 }
 
-func (d *DAG) GetExecutionPlan() map[string]map[string]interface{} {
-	return d.ExecutionPlan
+func (d *DAG) GetExecutionPlan() map[string]interface{} {
+	return d.executionPlan
 }
 
 func (d *DAG) SetStatus(taskName string, status string) {
-	d.FinishedTasksStatus[status][taskName] = true
-	d.Dag.RemoveNode(taskName)
+	d.finishedTasksStatus[status][taskName] = struct{}{}
+	d.sorter.done(taskName)
 }
 
 func (d *DAG) ShouldBeCanceled(taskName string) bool {
-	return d.ToBeCanceled[taskName]
+	_, ok := d.toBeCanceled[taskName]
+	return ok
 }
 
-func (d *DAG) CancelDependantTasks(taskName string, cancelPolicy string) {
-	getAllTaskSet := func(tasks map[string]map[string]interface{}) map[string]bool {
-		taskSet := make(map[string]bool)
-		for task, subTasks := range tasks {
-			taskSet[task] = true
-			for subTask := range getAllTaskSet(subTasks) {
-				taskSet[subTask] = true
-			}
+func (d *DAG) buildDAG() (*TopologicalSorter, map[string][]string) {
+	dependencyDict := make(map[string][]string)
+	sorter := NewTopologicalSorter()
+	for _, task := range d.taskCollection {
+		taskName := task["task"].(string)
+		dependencies, ok := task["depends-on"].([]string)
+		if !ok {
+			dependencies = []string{}
 		}
-		return taskSet
+		if d.reverse {
+			for _, dependency := range dependencies {
+				sorter.add(dependency, taskName)
+			}
+		} else {
+			sorter.add(taskName, dependencies...)
+		}
+		dependencyDict[taskName] = dependencies
 	}
+	return sorter, dependencyDict
+}
+
+// ... rest of the methods
+func getAllTaskSet(tasks map[string]struct{}) map[string]struct{} {
+	taskSet := make(map[string]struct{})
+	for task := range tasks {
+		taskSet[task] = struct{}{}
+	}
+	return taskSet
+}
+
+func (d *DAG) cancelDependantTasks(taskName string, cancelPolicy string) {
 	if cancelPolicy == "continue" {
 		return
 	}
-	notCancelledTasks := make(map[string]bool)
-	for task := range d.FinishedTasksStatus["failed"] {
-		notCancelledTasks[task] = true
+	notCancelledTasks := make(map[string]struct{})
+	for k, v := range d.finishedTasksStatus["failed"] {
+		notCancelledTasks[k] = v
 	}
-	for task := range d.FinishedTasksStatus["successful"] {
-		notCancelledTasks[task] = true
+	for k, v := range d.finishedTasksStatus["successful"] {
+		notCancelledTasks[k] = v
 	}
-	for rootTask, subTasks := range d.ExecutionPlan {
-		taskSet := getAllTaskSet(map[string]map[string]interface{}{rootTask: subTasks})
+	for rootTask, subTasks := range d.executionPlan {
+		taskSet := getAllTaskSet(subTasks.(map[string]struct{}))
 		if cancelPolicy == "abort-all" {
-			for task := range taskSet {
-				d.ToBeCanceled[task] = true
+			for k := range taskSet {
+				d.toBeCanceled[k] = struct{}{}
 			}
 		} else if cancelPolicy == "abort-related-flows" {
-			if taskSet[taskName] {
-				for task := range taskSet {
-					if !notCancelledTasks[task] {
-						d.ToBeCanceled[task] = true
+			if _, ok := taskSet[taskName]; ok {
+				for k := range taskSet {
+					if _, ok := notCancelledTasks[k]; !ok {
+						d.toBeCanceled[k] = struct{}{}
 					}
 				}
 			}
 		} else {
-			fmt.Printf("Unknown cancel policy '%s'\n", cancelPolicy)
+			// handle error
 		}
 	}
 }
 
-func createExecutionPlan(dependencyDict map[string][]string) map[string]map[string]interface{} {
-	executionPlan := make(map[string]map[string]interface{})
+func (d *DAG) createExecutionPlan(dependencyDict map[string][]string) map[string]interface{} {
+	executionPlan := make(map[string]interface{})
 	getRootTasks := func(dependencyDict map[string][]string) []string {
-		allTasks := make(map[string]bool)
-		for task := range dependencyDict {
-			allTasks[task] = true
+		allTasks := make(map[string]struct{})
+		for k := range dependencyDict {
+			allTasks[k] = struct{}{}
 		}
-		dependentTasks := make(map[string]bool)
-		for _, dependencies := range dependencyDict {
-			for _, dependency := range dependencies {
-				dependentTasks[dependency] = true
+		dependentTasks := make(map[string]struct{})
+		for _, dependents := range dependencyDict {
+			for _, dep := range dependents {
+				dependentTasks[dep] = struct{}{}
 			}
 		}
-		var rootTasks []string
-		for task := range allTasks {
-			if !dependentTasks[task] {
-				rootTasks = append(rootTasks, task)
+		rootTasks := make([]string, 0)
+		for k := range allTasks {
+			if _, ok := dependentTasks[k]; !ok {
+				rootTasks = append(rootTasks, k)
 			}
 		}
 		return rootTasks
 	}
-	getSubtaskPlan := func(taskName string, dependencyDict map[string][]string, level int) map[string]map[string]interface{} {
-		if _, ok := dependencyDict[taskName]; !ok {
-			return map[string]map[string]interface{}{taskName: make(map[string]interface{})}
+	getSubtaskPlan := func(taskName string, dependencyDict map[string][]string, level int) map[string]interface{} {
+		dependencies, ok := dependencyDict[taskName]
+		if !ok {
+			dependencies = []string{}
 		}
-		dependencies := dependencyDict[taskName]
-		plan := map[string]map[string]interface{}{taskName: make(map[string]interface{})}
+		plan := map[string]interface{}{taskName: make(map[string]interface{})}
 		for _, dependency := range dependencies {
 			subPlan := getSubtaskPlan(dependency, dependencyDict, level+1)
-			for task, subTasks := range subPlan {
-				plan[taskName][task] = subTasks
-			}
+			plan[taskName].(map[string]interface{})[dependency] = subPlan[dependency]
 		}
 		return plan
 	}
 	rootTasks := getRootTasks(dependencyDict)
 	for _, rootTask := range rootTasks {
-		for task, subTasks := range getSubtaskPlan(rootTask, dependencyDict) {
-			executionPlan[task] = subTasks
-		}
+		executionPlan[rootTask] = getSubtaskPlan(rootTask, dependencyDict, 0)[rootTask]
 	}
 	return executionPlan
-}
-
-func main() {
-	// TODO: Initialize taskCollection and reverse
-	taskCollection := []map[string]interface{}{}
-	reverse := false
-	dag := NewDAG(taskCollection, reverse)
-	fmt.Println(dag.GetExecutionPlan())
 }

@@ -5,13 +5,11 @@
 // Please replace "/path/to/your/command" and "arg1" with your actual command and arguments. Also, replace
 // "key" and []interface{}{"value1", "value2"} with your actual key and values.
 
-
 package main
 
 import (
 	"fmt"
 	"os/exec"
-	"strings"
 )
 
 type Task interface {
@@ -62,19 +60,19 @@ func (p *ProcessTask) Execute() error {
 	return nil
 }
 
-func main() {
-	taskParameters := map[string]interface{}{
-		"path": "/path/to/your/command",
-		"args": []interface{}{
-			"arg1",
-			map[string]interface{}{
-				"key": []interface{}{"value1", "value2"},
-			},
-		},
-	}
+// func main() {
+// 	taskParameters := map[string]interface{}{
+// 		"path": "/path/to/your/command",
+// 		"args": []interface{}{
+// 			"arg1",
+// 			map[string]interface{}{
+// 				"key": []interface{}{"value1", "value2"},
+// 			},
+// 		},
+// 	}
 
-	task := NewProcessTask("MyTask", taskParameters)
-	if err := task.Execute(); err != nil {
-		fmt.Printf("Task execution failed: %v\n", err)
-	}
-}
+// 	task := NewProcessTask("MyTask", taskParameters)
+// 	if err := task.Execute(); err != nil {
+// 		fmt.Printf("Task execution failed: %v\n", err)
+// 	}
+// }

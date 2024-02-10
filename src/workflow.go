@@ -1,4 +1,3 @@
-
 // This Go code does the same thing as your Python code. It defines a WorkflowFile struct with methods to
 // load a workflow from a file, process the workflow into a collection of tasks, and expand tasks with
 // variable values. The replacePlaceholders function is used to replace placeholders in a task with actual
@@ -11,12 +10,10 @@
 // Remember that error handling in Go is explicit, and it’s a good practice to always check for errors where
 // they can occur.
 
-
 package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
@@ -24,9 +21,9 @@ import (
 )
 
 type WorkflowFile struct {
-	SchemaPath       string
-	WorkflowRawData  map[string]interface{}
-	TaskCollection   []map[string]interface{}
+	SchemaPath      string
+	WorkflowRawData map[string]interface{}
+	TaskCollection  []map[string]interface{}
 }
 
 func NewWorkflowFile(workflowFilePath string, schemaPath string) *WorkflowFile {
@@ -43,7 +40,7 @@ func NewWorkflowFile(workflowFilePath string, schemaPath string) *WorkflowFile {
 }
 
 func loadWorkflow(filePath string) map[string]interface{} {
-	file, err := ioutil.ReadFile(filePath)
+	file, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		os.Exit(1)
@@ -149,7 +146,6 @@ func product(arrays [][]interface{}) [][]interface{} {
 	}
 }
 
-
 // This Go code does the same thing as your Python code. It defines StaticWorkflowValidation, CheckDuplicatedTasks,
 // and CheckNotExistingTasks methods on the WorkflowFile struct. The StaticWorkflowValidation method calls the other
 // two methods to perform static validation of the workflow. The CheckDuplicatedTasks method checks for duplicated
@@ -203,20 +199,8 @@ func (w *WorkflowFile) CheckNotExistingTasks() {
 	}
 }
 
-
-func main() {
-	workflowFile := NewWorkflowFile("./workflow.yaml", "")
-	fmt.Println(workflowFile.TaskCollection)
-}
-
-
-package main
-
-import (
-	"fmt"
-)
-
 func main() {
 	workflowFile := NewWorkflowFile("./workflow.yaml", "")
 	workflowFile.StaticWorkflowValidation()
+	fmt.Println(workflowFile.TaskCollection)
 }

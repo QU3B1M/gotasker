@@ -38,20 +38,15 @@ func (w *WorkflowProcessor) ExecuteTask(dag *DAG, task map[string]interface{}, a
 		taskObject := w.CreateTaskObject(task, action)
 		fmt.Printf("[%s] Starting task.\n", taskName)
 		startTime := time.Now()
-		// TODO: Implement taskObject.Execute()
+		taskObject.Execute()
 		fmt.Printf("[%s] Finished task in %.2f seconds.\n", taskName, time.Since(startTime).Seconds())
 		dag.SetStatus(taskName, "successful")
 	}
 }
 
 func (w *WorkflowProcessor) CreateTaskObject(task map[string]interface{}, action string) Task {
-	// TODO: Implement TASKS_HANDLERS
-	taskType := task[action].(map[string]interface{})["this"].(string)
-	taskHandler := TASKS_HANDLERS[taskType]
-	if taskHandler != nil {
-		return taskHandler(task["task"].(string), task[action].(map[string]interface{})["with"].(map[string]interface{}))
-	}
-	panic(fmt.Sprintf("Unknown task type '%s'.", taskType))
+	taskHandler := NewProcessTask(task["task"].(string), task[action].(map[string]interface{})["with"].(map[string]interface{}))
+	return taskHandler
 }
 
 func (w *WorkflowProcessor) ExecuteTasksParallel() {
@@ -112,11 +107,11 @@ func (w *WorkflowProcessor) AbortExecution() {
 	// TODO: Implement AbortExecution
 }
 
-func main() {
-	// TODO: Initialize workflowFilePath, dryRun, and threads
-	workflowFilePath := ""
-	dryRun := false
-	threads := 0
-	workflowProcessor := NewWorkflowProcessor(workflowFilePath, dryRun, threads)
-	workflowProcessor.Run()
-}
+// func main() {
+// 	// TODO: Initialize workflowFilePath, dryRun, and threads
+// 	workflowFilePath := ""
+// 	dryRun := false
+// 	threads := 0
+// 	workflowProcessor := NewWorkflowProcessor(workflowFilePath, dryRun, threads)
+// 	workflowProcessor.Run()
+// }

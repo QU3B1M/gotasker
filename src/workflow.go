@@ -199,8 +199,8 @@ func (w *WorkflowFile) CheckNotExistingTasks() {
 	}
 }
 
-func main() {
-	workflowFile := NewWorkflowFile("./workflow.yaml", "")
-	workflowFile.StaticWorkflowValidation()
-	fmt.Println(workflowFile.TaskCollection)
-}
+// func main() {
+// 	workflowFile := NewWorkflowFile("./workflow.yaml", "")
+// 	workflowFile.StaticWorkflowValidation()
+// 	fmt.Println(workflowFile.TaskCollection)
+// }

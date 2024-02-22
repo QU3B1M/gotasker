@@ -1,127 +1,215 @@
-// This Go code does the same thing as your Python code. It defines a WorkflowFile struct with methods to
+// This Go code does the same thing as your Python code. It defines a Workflow struct with methods to
 // load a workflow from a file, process the workflow into a collection of tasks, and expand tasks with
 // variable values. The replacePlaceholders function is used to replace placeholders in a task with actual
 // variable values. The product function is used to generate all combinations of variable values for tasks
 // with a ‘foreach’ field.
 
 // Please replace "./workflow.yaml" with your actual workflow file path. Also, replace "./schemas/schema_v1.json"
-// with your actual schema file path if you have one.
-
-// Remember that error handling in Go is explicit, and it’s a good practice to always check for errors where
-// they can occur.
+// with your actual json file path if you have one.
 
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
+	"text/template"
 
 	"gopkg.in/yaml.v2"
 )
 
-type WorkflowFile struct {
-	SchemaPath      string
-	WorkflowRawData map[string]interface{}
-	TaskCollection  []map[string]interface{}
+type Task struct {
+	Name      string    `json:"name"`
+	Do        Action    `json:"do"`
+	Cleanup   Action    `json:"cleanup"`
+	DependsOn []string  `json:"depends-on"`
+	ForEach   []ForEach `json:"foreach"`
 }
 
-func NewWorkflowFile(workflowFilePath string, schemaPath string) *WorkflowFile {
-	if schemaPath == "" {
-		schemaPath = "./schemas/schema_v1.json"
-	}
+type Action struct {
+	This string `json:"this"`
+	With With   `json:"with"`
+}
+
+type With struct {
+	This string        `json:"this"`
+	Args []interface{} `json:"args"`
+	Path string        `json:"path"`
+}
+
+type ForEach struct {
+	Variable string    `json:"variable"`
+	As       string    `json:"as"`
+	ForEach  []ForEach `json:"foreach"`
+}
+
+type Workflow struct {
+	Tasks     []Task      `json:"tasks"`
+	Variables interface{} `json:"variables"`
+}
+
+func NewWorkflowFile(workflowFilePath string, schemaPath string) *Workflow {
+	var workflow Workflow
 	workflowRawData := loadWorkflow(workflowFilePath)
 	taskCollection := processWorkflow(workflowRawData)
-	return &WorkflowFile{
-		SchemaPath:      schemaPath,
-		WorkflowRawData: workflowRawData,
-		TaskCollection:  taskCollection,
+	// Create a map with the workflow data
+	mapWorkflow := map[string]interface{}{
+		"variables": workflowRawData["variables"],
+		"tasks":     taskCollection,
 	}
+	// Convert the map to JSON
+	jsonData, err := json.Marshal(mapWorkflow)
+	if err != nil {
+		fmt.Println("Error converting to JSON:", err)
+		os.Exit(1)
+	}
+	// Convert the JSON to a struct
+	json.Unmarshal(jsonData, &workflow)
+
+	return &workflow
 }
 
 func loadWorkflow(filePath string) map[string]interface{} {
+	// var json Schema
+	json := make(map[string]interface{})
 	file, err := os.ReadFile(filePath)
 	if err != nil {
 		fmt.Println("Error reading file:", err)
 		os.Exit(1)
 	}
-	data := make(map[string]interface{})
-	err = yaml.Unmarshal(file, &data)
+	// data := make(map[string]interface{})
+	err = yaml.Unmarshal(file, &json)
 	if err != nil {
 		fmt.Println("Error parsing YAML:", err)
 		os.Exit(1)
 	}
-	return data
+	return interfaceKeysToString(json).(map[string]interface{})
 }
 
 func processWorkflow(workflowRawData map[string]interface{}) []map[string]interface{} {
 	taskCollection := []map[string]interface{}{}
+
+	// Convert the interface keys to string and separate the variables from the tasks
 	variables := workflowRawData["variables"].(map[string]interface{})
 	tasks := workflowRawData["tasks"].([]interface{})
+
+	// Analyze the workflow data and creates the corresponding tasks.
 	for _, task := range tasks {
-		taskMap := task.(map[string]interface{})
-		expandedTasks := expandTask(taskMap, variables)
-		taskCollection = append(taskCollection, expandedTasks...)
+		if foreach, ok := task.(map[string]interface{})["foreach"]; ok {
+			newTasks := extpandTask(task, variables, foreach.([]interface{}))
+			for _, task := range newTasks {
+				taskCollection = append(taskCollection, task)
+			}
+		} else {
+			// This task does not have a 'foreach' field, so we just need to replace the placeholders.
+			taskToAdd := replacePlaceholders(task, variables)
+			taskCollection = append(taskCollection, taskToAdd.(map[string]interface{}))
+		}
 	}
+
 	return taskCollection
 }
 
-func replacePlaceholders(element interface{}, values map[string]interface{}) interface{} {
-	switch v := element.(type) {
+func interfaceKeysToString(i interface{}) interface{} {
+	switch x := i.(type) {
+	case map[interface{}]interface{}:
+		m2 := map[string]interface{}{}
+		for k, v := range x {
+			m2[k.(string)] = interfaceKeysToString(v)
+		}
+		return m2
 	case map[string]interface{}:
-		newMap := make(map[string]interface{})
-		for key, value := range v {
-			newMap[key] = replacePlaceholders(value, values)
+		m2 := map[string]interface{}{}
+		for k, v := range x {
+			m2[k] = interfaceKeysToString(v)
 		}
-		return newMap
+		return m2
 	case []interface{}:
-		newSlice := make([]interface{}, len(v))
-		for i, subElement := range v {
-			newSlice[i] = replacePlaceholders(subElement, values)
+		i2 := make([]interface{}, len(x))
+		for i, v := range x {
+			i2[i] = interfaceKeysToString(v)
 		}
-		return newSlice
-	case string:
-		for key, value := range values {
-			v = strings.ReplaceAll(v, "{"+key+"}", fmt.Sprint(value))
-		}
-		return v
-	default:
-		return v
+		return i2
 	}
+	return i
 }
 
-func expandTask(task map[string]interface{}, variables map[string]interface{}) []map[string]interface{} {
-	expandedTasks := []map[string]interface{}{}
+func extpandTask(task interface{}, variables map[string]interface{}, foreach []interface{}) []map[string]interface{} {
 
-	if _, ok := task["foreach"]; ok {
-		loopVariables := task["foreach"].([]interface{})
-
-		variableNames := make([]string, len(loopVariables))
-		asIdentifiers := make([]string, len(loopVariables))
-		variableValues := make([][]interface{}, len(loopVariables))
-
-		for i, loopVariableData := range loopVariables {
-			loopVariableDataMap := loopVariableData.(map[string]interface{})
-			variableNames[i] = loopVariableDataMap["variable"].(string)
-			asIdentifiers[i] = loopVariableDataMap["as"].(string)
-			variableValues[i] = variables[variableNames[i]].([]interface{})
+	foreachMap := make([]map[string]interface{}, len(foreach))
+	for i, v := range foreach {
+		// Use type assertion to convert v to map[string]string
+		mapValue, ok := v.(map[string]interface{})
+		if !ok {
+			fmt.Println("Error parsing foreach field." + fmt.Sprint(v))
 		}
-
-		for _, combination := range product(variableValues) {
-			variablesWithItems := make(map[string]interface{})
-			for key, value := range variables {
-				variablesWithItems[key] = value
-			}
-			for i, value := range combination {
-				variablesWithItems[asIdentifiers[i]] = value
-			}
-			expandedTasks = append(expandedTasks, replacePlaceholders(task, variablesWithItems).(map[string]interface{}))
-		}
-	} else {
-		expandedTasks = append(expandedTasks, replacePlaceholders(task, variables).(map[string]interface{}))
+		foreachMap[i] = mapValue
 	}
 
-	return expandedTasks
+	newTasks := []map[string]interface{}{}
+	variableNames := make([]string, len(foreachMap))
+	asIdentifiers := make([]string, len(foreachMap))
+
+	for i, loop := range foreachMap {
+		variableNames[i] = loop["variable"].(string)
+		asIdentifiers[i] = loop["as"].(string)
+	}
+
+	variableValues := make([][]interface{}, len(variableNames))
+
+	for i, name := range variableNames {
+		value, ok := variables[name]
+		if !ok {
+			fmt.Println("Error parsing variable name." + fmt.Sprint(name))
+		}
+		variableValues[i] = value.([]interface{})
+	}
+	for _, combination := range product(variableValues) {
+		variablesWithItems := make(map[string]interface{})
+		for k, v := range variables {
+			variablesWithItems[k] = v
+		}
+		for i, v := range combination {
+			variablesWithItems[asIdentifiers[i]] = v
+		}
+		taskToAdd := replacePlaceholders(task, variablesWithItems).(map[string]interface{})
+		newTasks = append(newTasks, taskToAdd)
+	}
+	return newTasks
+}
+
+func replacePlaceholders(i interface{}, variables map[string]interface{}) interface{} {
+	switch x := i.(type) {
+	case map[string]interface{}:
+		m2 := map[string]interface{}{}
+		for k, v := range x {
+			m2[k] = replacePlaceholders(v, variables)
+		}
+		return m2
+	case []interface{}:
+		i2 := make([]interface{}, len(x))
+		for i, v := range x {
+			i2[i] = replacePlaceholders(v, variables)
+		}
+		return i2
+	case string:
+		temp := template.New("workflow")
+		temp, err := temp.Parse(i.(string))
+		if err != nil {
+			fmt.Println("Error parsing template:", err)
+			os.Exit(1)
+		}
+		buf := &bytes.Buffer{}
+		err = temp.Execute(buf, variables)
+		if err != nil {
+			fmt.Println("Error executing template:", err)
+			os.Exit(1)
+		}
+		return buf.String()
+	}
+	fmt.Println("Error parsing type:" + fmt.Sprint(i))
+	return i
 }
 
 func product(arrays [][]interface{}) [][]interface{} {
@@ -146,61 +234,10 @@ func product(arrays [][]interface{}) [][]interface{} {
 	}
 }
 
-// This Go code does the same thing as your Python code. It defines StaticWorkflowValidation, CheckDuplicatedTasks,
-// and CheckNotExistingTasks methods on the WorkflowFile struct. The StaticWorkflowValidation method calls the other
-// two methods to perform static validation of the workflow. The CheckDuplicatedTasks method checks for duplicated
-// task names, and the CheckNotExistingTasks method checks for tasks that do not exist.
-
-// Please replace "./workflow.yaml" with your actual workflow file path. Also, replace "./schemas/schema_v1.json"
-// with your actual schema file path if you have one.
-
-// Remember that error handling in Go is explicit, and it’s a good practice to always check for errors where they
-// can occur.
-
-func (w *WorkflowFile) StaticWorkflowValidation() {
-	w.CheckDuplicatedTasks()
-	w.CheckNotExistingTasks()
+func main() {
+	workflowFilePath := "/home/quebim/flowgo/examples/test.yaml"
+	NewWorkflowFile(workflowFilePath, "")
+	// fmt.Println(workflowFile.WorkflowRawData)
+	// workflowFile.StaticWorkflowValidation()
+	// fmt.Println(workflowFile.TaskCollection)
 }
-
-func (w *WorkflowFile) CheckDuplicatedTasks() {
-	taskNameCounts := make(map[string]int)
-	for _, task := range w.TaskCollection {
-		taskName := task["task"].(string)
-		taskNameCounts[taskName]++
-	}
-
-	var duplicates []string
-	for name, count := range taskNameCounts {
-		if count > 1 {
-			duplicates = append(duplicates, name)
-		}
-	}
-
-	if len(duplicates) > 0 {
-		fmt.Printf("Duplicated task names: %s\n", strings.Join(duplicates, ", "))
-	}
-}
-
-func (w *WorkflowFile) CheckNotExistingTasks() {
-	taskNames := make(map[string]bool)
-	for _, task := range w.TaskCollection {
-		taskName := task["task"].(string)
-		taskNames[taskName] = true
-	}
-
-	for _, task := range w.TaskCollection {
-		if dependencies, ok := task["depends-on"].([]interface{}); ok {
-			for _, dependency := range dependencies {
-				if _, ok := taskNames[dependency.(string)]; !ok {
-					fmt.Printf("Tasks do not exist: %s\n", dependency)
-				}
-			}
-		}
-	}
-}
-
-// func main() {
-// 	workflowFile := NewWorkflowFile("./workflow.yaml", "")
-// 	workflowFile.StaticWorkflowValidation()
-// 	fmt.Println(workflowFile.TaskCollection)
-// }

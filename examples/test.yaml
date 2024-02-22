@@ -1,0 +1,44 @@
+# Copyright (C) 2015, Wazuh Inc.
+# Created by Wazuh, Inc. <info@wazuh.com>.
+# This program is a free software; you can redistribute it and/or modify it under the terms of GPLv2
+name: test workflow
+description: Test
+variables:
+  name: "test"
+  names:
+    - Pepe
+    - Juan
+  city: "New York"
+  new_city: "San Francisco"
+  cities:
+    - New York
+    - San Francisco
+tasks:
+  # Generic task
+  - name: "test-{{.name}}"
+    description: "Example task."
+    do:
+      this: process
+      with:
+        path: echo
+        args:
+          - "Hello {{.name}} from {{.city}}!"
+    foreach:
+      - variable: names
+        as: name
+  # Generic task
+  - name: "test-{{.name}}-moved-to-{{.new_city}}"
+    description: "Example task."
+    do:
+      this: process
+      with:
+        path: echo
+        args:
+          - "Hello {{.name}} from {{.cititi}}!"
+    depends-on:
+      - "test-{{.name}}"
+    foreach:
+      - variable: names
+        as: name
+      - variable: cities
+        as: cititi

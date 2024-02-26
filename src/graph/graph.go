@@ -1,6 +1,6 @@
 // Using the code from github.com/kendru/darwin/blob/main/go/depgraph/ as base
 // Copied the code from the above link in order to modify it if required.
-package main
+package graph
 
 import (
 	"errors"
@@ -132,9 +132,7 @@ func (g *DependencyGraph) TopSorted() []string {
 
 	allNodes := make([]string, 0, nodeCount)
 	for _, layer := range layers {
-		for _, node := range layer {
-			allNodes = append(allNodes, node)
-		}
+		allNodes = append(allNodes, layer...)
 	}
 
 	return allNodes

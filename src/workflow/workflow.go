@@ -96,8 +96,8 @@ func ProcessWorkflow(workflowRawData map[string]interface{}) []map[string]interf
 
 	// Analyze the workflow data and creates the corresponding tasks.
 	for _, task := range tasks {
-		if foreach, ok := task.(map[string]interface{})["foreach"]; ok {
-			newTasks := ExpandTask(task, variables, foreach.([]interface{}))
+		if _, ok := task.(map[string]interface{})["foreach"]; ok {
+			newTasks := ExpandTask(task, variables)
 			taskCollection = append(taskCollection, newTasks...)
 		} else {
 			// This task does not have a 'foreach' field, so we just need to replace the placeholders.
@@ -133,10 +133,11 @@ func ConvertKeysToString(i interface{}) interface{} {
 	return i
 }
 
-func ExpandTask(task interface{}, variables map[string]interface{}, foreach []interface{}) []map[string]interface{} {
+func ExpandTask(task interface{}, variables map[string]interface{}) []map[string]interface{} {
+	iterator := task.(map[string]interface{})["foreach"].([]interface{})
+	foreachMap := make([]map[string]interface{}, len(iterator))
 
-	foreachMap := make([]map[string]interface{}, len(foreach))
-	for i, v := range foreach {
+	for i, v := range iterator {
 		// Use type assertion to convert v to map[string]string
 		mapValue, ok := v.(map[string]interface{})
 		if !ok {
@@ -171,14 +172,15 @@ func ExpandTask(task interface{}, variables map[string]interface{}, foreach []in
 		for i, v := range combination {
 			variablesWithItems[asIdentifiers[i]] = v
 		}
+		delete((task.(map[string]interface{})), "foreach")
 		taskToAdd := ReplacePlaceholders(task, variablesWithItems).(map[string]interface{})
 		newTasks = append(newTasks, taskToAdd)
 	}
 	return newTasks
 }
 
-func ReplacePlaceholders(i interface{}, variables map[string]interface{}) interface{} {
-	switch x := i.(type) {
+func ReplacePlaceholders(item interface{}, variables map[string]interface{}) interface{} {
+	switch x := item.(type) {
 	case map[string]interface{}:
 		m2 := map[string]interface{}{}
 		for k, v := range x {
@@ -193,7 +195,7 @@ func ReplacePlaceholders(i interface{}, variables map[string]interface{}) interf
 		return i2
 	case string:
 		temp := template.New("workflow")
-		temp, err := temp.Parse(i.(string))
+		temp, err := temp.Parse(item.(string))
 		if err != nil {
 			fmt.Println("Error parsing template:", err)
 			os.Exit(1)
@@ -206,8 +208,8 @@ func ReplacePlaceholders(i interface{}, variables map[string]interface{}) interf
 		}
 		return buf.String()
 	}
-	fmt.Println("Error parsing type:" + fmt.Sprint(i))
-	return i
+	fmt.Println("Error parsing type:" + fmt.Sprint(item))
+	return item
 }
 
 func product(arrays [][]interface{}) [][]interface{} {
@@ -230,12 +232,4 @@ func product(arrays [][]interface{}) [][]interface{} {
 		}
 		return results
 	}
-}
-
-func main() {
-	workflowFilePath := "/home/quebim/flowgo/examples/test.yaml"
-	NewWorkflowFile(workflowFilePath, "")
-	// fmt.Println(workflowFile.WorkflowRawData)
-	// workflowFile.StaticWorkflowValidation()
-	// fmt.Println(workflowFile.TaskCollection)
 }

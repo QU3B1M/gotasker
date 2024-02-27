@@ -1,6 +1,6 @@
 // This Go code does the same thing as your Python code. It defines a Workflow struct with methods to
 // load a workflow from a file, process the workflow into a collection of tasks, and expand tasks with
-// variable values. The replacePlaceholders function is used to replace placeholders in a task with actual
+// variable values. The ReplacePlaceholders function is used to replace placeholders in a task with actual
 // variable values. The product function is used to generate all combinations of variable values for tasks
 // with a ‘foreach’ field.
 
@@ -51,8 +51,8 @@ type Workflow struct {
 
 func NewWorkflowFile(workflowFilePath string, schemaPath string) *Workflow {
 	var workflow Workflow
-	workflowRawData := loadWorkflow(workflowFilePath)
-	taskCollection := processWorkflow(workflowRawData)
+	workflowRawData := LoadWorkflow(workflowFilePath)
+	taskCollection := ProcessWorkflow(workflowRawData)
 	// Create a map with the workflow data
 	mapWorkflow := map[string]interface{}{
 		"variables": workflowRawData["variables"],
@@ -70,7 +70,7 @@ func NewWorkflowFile(workflowFilePath string, schemaPath string) *Workflow {
 	return &workflow
 }
 
-func loadWorkflow(filePath string) map[string]interface{} {
+func LoadWorkflow(filePath string) map[string]interface{} {
 	// var json Schema
 	json := make(map[string]interface{})
 	file, err := os.ReadFile(filePath)
@@ -84,10 +84,10 @@ func loadWorkflow(filePath string) map[string]interface{} {
 		fmt.Println("Error parsing YAML:", err)
 		os.Exit(1)
 	}
-	return interfaceKeysToString(json).(map[string]interface{})
+	return ConvertKeysToString(json).(map[string]interface{})
 }
 
-func processWorkflow(workflowRawData map[string]interface{}) []map[string]interface{} {
+func ProcessWorkflow(workflowRawData map[string]interface{}) []map[string]interface{} {
 	taskCollection := []map[string]interface{}{}
 
 	// Convert the interface keys to string and separate the variables from the tasks
@@ -97,13 +97,11 @@ func processWorkflow(workflowRawData map[string]interface{}) []map[string]interf
 	// Analyze the workflow data and creates the corresponding tasks.
 	for _, task := range tasks {
 		if foreach, ok := task.(map[string]interface{})["foreach"]; ok {
-			newTasks := extpandTask(task, variables, foreach.([]interface{}))
-			for _, task := range newTasks {
-				taskCollection = append(taskCollection, task)
-			}
+			newTasks := ExpandTask(task, variables, foreach.([]interface{}))
+			taskCollection = append(taskCollection, newTasks...)
 		} else {
 			// This task does not have a 'foreach' field, so we just need to replace the placeholders.
-			taskToAdd := replacePlaceholders(task, variables)
+			taskToAdd := ReplacePlaceholders(task, variables)
 			taskCollection = append(taskCollection, taskToAdd.(map[string]interface{}))
 		}
 	}
@@ -111,31 +109,31 @@ func processWorkflow(workflowRawData map[string]interface{}) []map[string]interf
 	return taskCollection
 }
 
-func interfaceKeysToString(i interface{}) interface{} {
+func ConvertKeysToString(i interface{}) interface{} {
 	switch x := i.(type) {
 	case map[interface{}]interface{}:
 		m2 := map[string]interface{}{}
 		for k, v := range x {
-			m2[k.(string)] = interfaceKeysToString(v)
+			m2[k.(string)] = ConvertKeysToString(v)
 		}
 		return m2
 	case map[string]interface{}:
 		m2 := map[string]interface{}{}
 		for k, v := range x {
-			m2[k] = interfaceKeysToString(v)
+			m2[k] = ConvertKeysToString(v)
 		}
 		return m2
 	case []interface{}:
 		i2 := make([]interface{}, len(x))
 		for i, v := range x {
-			i2[i] = interfaceKeysToString(v)
+			i2[i] = ConvertKeysToString(v)
 		}
 		return i2
 	}
 	return i
 }
 
-func extpandTask(task interface{}, variables map[string]interface{}, foreach []interface{}) []map[string]interface{} {
+func ExpandTask(task interface{}, variables map[string]interface{}, foreach []interface{}) []map[string]interface{} {
 
 	foreachMap := make([]map[string]interface{}, len(foreach))
 	for i, v := range foreach {
@@ -173,24 +171,24 @@ func extpandTask(task interface{}, variables map[string]interface{}, foreach []i
 		for i, v := range combination {
 			variablesWithItems[asIdentifiers[i]] = v
 		}
-		taskToAdd := replacePlaceholders(task, variablesWithItems).(map[string]interface{})
+		taskToAdd := ReplacePlaceholders(task, variablesWithItems).(map[string]interface{})
 		newTasks = append(newTasks, taskToAdd)
 	}
 	return newTasks
 }
 
-func replacePlaceholders(i interface{}, variables map[string]interface{}) interface{} {
+func ReplacePlaceholders(i interface{}, variables map[string]interface{}) interface{} {
 	switch x := i.(type) {
 	case map[string]interface{}:
 		m2 := map[string]interface{}{}
 		for k, v := range x {
-			m2[k] = replacePlaceholders(v, variables)
+			m2[k] = ReplacePlaceholders(v, variables)
 		}
 		return m2
 	case []interface{}:
 		i2 := make([]interface{}, len(x))
 		for i, v := range x {
-			i2[i] = replacePlaceholders(v, variables)
+			i2[i] = ReplacePlaceholders(v, variables)
 		}
 		return i2
 	case string:

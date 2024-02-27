@@ -75,3 +75,115 @@ func TestExpandTask(t *testing.T) {
 		t.Errorf("Expected %v, but got %v", expected, actual)
 	}
 }
+
+func TestConvertKeysToString(t *testing.T) {
+	input := map[interface{}]interface{}{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": []interface{}{
+			"item1",
+			"item2",
+		},
+		"key4": map[interface{}]interface{}{
+			"key5": "value5",
+			"key6": "value6",
+		},
+	}
+	expected := map[string]interface{}{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": []interface{}{
+			"item1",
+			"item2",
+		},
+		"key4": map[string]interface{}{
+			"key5": "value5",
+			"key6": "value6",
+		},
+	}
+	actual := workflow.ConvertKeysToString(input)
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("Expected %v, but got %v", expected, actual)
+	}
+}
+
+func TestConvertKeysToStringWithMap(t *testing.T) {
+	input := map[string]interface{}{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": []interface{}{
+			"item1",
+			"item2",
+		},
+		"key4": map[string]interface{}{
+			"key5": "value5",
+			"key6": "value6",
+		},
+	}
+	expected := map[string]interface{}{
+		"key1": "value1",
+		"key2": "value2",
+		"key3": []interface{}{
+			"item1",
+			"item2",
+		},
+		"key4": map[string]interface{}{
+			"key5": "value5",
+			"key6": "value6",
+		},
+	}
+	actual := workflow.ConvertKeysToString(input)
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("Expected %v, but got %v", expected, actual)
+	}
+}
+
+func TestConvertKeysToStringWithSlice(t *testing.T) {
+	input := []interface{}{
+		"item1",
+		"item2",
+		map[interface{}]interface{}{
+			"key1": "value1",
+			"key2": "value2",
+		},
+	}
+	expected := []interface{}{
+		"item1",
+		"item2",
+		map[string]interface{}{
+			"key1": "value1",
+			"key2": "value2",
+		},
+	}
+	actual := workflow.ConvertKeysToString(input)
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("Expected %v, but got %v", expected, actual)
+	}
+}
+
+func TestConvertKeysToStringWithSliceOfMap(t *testing.T) {
+	input := []map[interface{}]interface{}{
+		{
+			"key1": "value1",
+			"key2": "value2",
+		},
+		{
+			"key3": "value3",
+			"key4": "value4",
+		},
+	}
+	expected := []map[string]interface{}{
+		{
+			"key1": "value1",
+			"key2": "value2",
+		},
+		{
+			"key3": "value3",
+			"key4": "value4",
+		},
+	}
+	actual := workflow.ConvertKeysToString(input)
+	if !reflect.DeepEqual(expected, actual) {
+		t.Errorf("Expected %v, but got %v", expected, actual)
+	}
+}

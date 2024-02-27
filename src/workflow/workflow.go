@@ -129,6 +129,12 @@ func ConvertKeysToString(i interface{}) interface{} {
 			i2[i] = ConvertKeysToString(v)
 		}
 		return i2
+	case []map[interface{}]interface{}:
+		i2 := make([]map[string]interface{}, len(x))
+		for i, v := range x {
+			i2[i] = ConvertKeysToString(v).(map[string]interface{})
+		}
+		return i2
 	}
 	return i
 }

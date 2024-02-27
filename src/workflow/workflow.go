@@ -172,7 +172,9 @@ func ExpandTask(task interface{}, variables map[string]interface{}) []map[string
 		for i, v := range combination {
 			variablesWithItems[asIdentifiers[i]] = v
 		}
+		// Remove the 'foreach' field from the task.
 		delete((task.(map[string]interface{})), "foreach")
+		// Replace the placeholders in the task with the actual values
 		taskToAdd := ReplacePlaceholders(task, variablesWithItems).(map[string]interface{})
 		newTasks = append(newTasks, taskToAdd)
 	}

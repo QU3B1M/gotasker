@@ -3,18 +3,14 @@
 // check if a task should be canceled, cancel dependent tasks, and create an execution plan. The topsort
 // package is used to create and manipulate the DAG.
 
-// Please replace TaskCollection := []map[string]interface{}{} and reverse := false with your actual task
-// collection and reverse flag.
+package dag
 
-// Remember that error handling in Go is explicit, and it’s a good practice to always check for errors
-// where they can occur.
-
-package main
+import "gotasker/src/graph"
 
 type DAG struct {
 	taskCollection      []map[string]interface{}
 	reverse             bool
-	graph               *DependencyGraph
+	graph               *graph.DependencyGraph
 	dependencyTree      map[string][]string
 	toBeCanceled        map[string]struct{}
 	finishedTasksStatus map[string]map[string]struct{}
@@ -54,9 +50,9 @@ func (d *DAG) ShouldBeCanceled(taskName string) bool {
 	return ok
 }
 
-func (d *DAG) buildDAG() (*DependencyGraph, map[string][]string) {
+func (d *DAG) buildDAG() (*graph.DependencyGraph, map[string][]string) {
 	dependencyDict := make(map[string][]string)
-	graph := NewDependencyGraph()
+	graph := graph.NewDependencyGraph()
 	for _, task := range d.taskCollection {
 		taskName := task["task"].(string)
 		dependencies, ok := task["depends-on"].([]string)
@@ -75,7 +71,6 @@ func (d *DAG) buildDAG() (*DependencyGraph, map[string][]string) {
 	return graph, dependencyDict
 }
 
-// ... rest of the methods
 func getAllTaskSet(tasks map[string]struct{}) map[string]struct{} {
 	taskSet := make(map[string]struct{})
 	for task := range tasks {
@@ -109,8 +104,6 @@ func (d *DAG) cancelDependantTasks(taskName string, cancelPolicy string) {
 					}
 				}
 			}
-		} else {
-			// handle error
 		}
 	}
 }
@@ -154,4 +147,24 @@ func (d *DAG) createExecutionPlan(dependencyDict map[string][]string) map[string
 		executionPlan[rootTask] = getSubtaskPlan(rootTask, dependencyDict, 0)[rootTask]
 	}
 	return executionPlan
+}
+
+func main() {
+	// Test the DAG
+	taskCollection := []map[string]interface{}{
+		{"task": "task1", "depends-on": []string{}},
+		{"task": "task2", "depends-on": []string{"task1"}},
+		{"task": "task3", "depends-on": []string{"task1"}},
+		{"task": "task4", "depends-on": []string{"task2", "task3"}},
+
+		{"task": "task5", "depends-on": []string{"task4"}},
+		{"task": "task6", "depends-on": []string{"task4"}},
+	}
+	dag := NewDAG(taskCollection, false)
+	availableTasks := dag.GetAvailableTasks()
+	for _, task := range availableTasks {
+		println(task)
+	}
+	executionPlan := dag.GetExecutionPlan()
+	println(executionPlan)
 }

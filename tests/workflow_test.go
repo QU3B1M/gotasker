@@ -1,7 +1,7 @@
 package tests
 
 import (
-	"flowgo/src/workflow"
+	"gotasker/src/workflow"
 	"reflect"
 	"testing"
 )

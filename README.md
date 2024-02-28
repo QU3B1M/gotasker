@@ -1,4 +1,4 @@
-## Workflow Engine
+## GoTasker
 
 - [ ] Execute tasks in parallel
 - [ ] Compatible input yaml and json

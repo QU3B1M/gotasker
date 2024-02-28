@@ -195,10 +195,22 @@ func ReplacePlaceholders(item interface{}, variables map[string]interface{}) int
 			m2[k] = ReplacePlaceholders(v, variables)
 		}
 		return m2
+	case map[interface{}]interface{}:
+		m2 := map[string]interface{}{}
+		for k, v := range x {
+			m2[k.(string)] = ReplacePlaceholders(v, variables)
+		}
+		return m2
 	case []interface{}:
 		i2 := make([]interface{}, len(x))
 		for i, v := range x {
 			i2[i] = ReplacePlaceholders(v, variables)
+		}
+		return i2
+	case []map[interface{}]interface{}:
+		i2 := make([]map[string]interface{}, len(x))
+		for i, v := range x {
+			i2[i] = ReplacePlaceholders(v, variables).(map[string]interface{})
 		}
 		return i2
 	case string:

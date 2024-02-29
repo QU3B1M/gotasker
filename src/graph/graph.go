@@ -20,7 +20,7 @@ type DependencyGraph struct {
 	dependents   depmap // `dependents` tracks parent -> children.
 }
 
-func NewDependencyGraph() *DependencyGraph {
+func NewGraph() *DependencyGraph {
 	return &DependencyGraph{
 		dependencies: make(depmap),
 		dependents:   make(depmap),

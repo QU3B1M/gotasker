@@ -49,50 +49,81 @@ type Workflow struct {
 	Variables interface{} `json:"variables"`
 }
 
-func NewWorkflowFile(workflowFilePath string, schemaPath string) *Workflow {
+// NewWorkflow loads a workflow from a file, processes it,
+// and returns a pointer to a Workflow struct. It can return an error
+// if there's a problem with marshalling or unmarshalling the data.
+func NewWorkflow(workflowFilePath string) (*Workflow, error) {
 	var workflow Workflow
-	workflowRawData := LoadWorkflow(workflowFilePath)
-	taskCollection := ProcessWorkflow(workflowRawData)
+
+	workflowData, err := loadWorkflowFile(workflowFilePath)
+	if err != nil {
+		return nil, fmt.Errorf("error loading workflow: %w", err)
+	}
+
+	taskCollection, err := ProcessWorkflow(workflowData)
+	if err != nil {
+		return nil, fmt.Errorf("error processing workflow: %w", err)
+	}
+
 	// Create a map with the workflow data
 	mapWorkflow := map[string]interface{}{
-		"variables": workflowRawData["variables"],
+		"variables": workflowData["variables"],
 		"tasks":     taskCollection,
 	}
+
 	// Convert the map to JSON
 	jsonData, err := json.Marshal(mapWorkflow)
 	if err != nil {
-		fmt.Println("Error converting to JSON:", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("error converting to JSON: %w", err)
 	}
-	// Convert the JSON to a struct
-	json.Unmarshal(jsonData, &workflow)
 
-	return &workflow
+	// Convert the JSON to a struct
+	err = json.Unmarshal(jsonData, &workflow)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling JSON: %w", err)
+	}
+
+	return &workflow, nil
 }
 
-func LoadWorkflow(filePath string) map[string]interface{} {
-	// var json Schema
+// loadWorkflowFile reads a workflow from a file, parses it from YAML to JSON,
+// converts all keys to strings, and returns the result as a map.
+// It can return an error if there's a problem with reading the file,
+// parsing the YAML, or converting the keys.
+func loadWorkflowFile(filePath string) (map[string]interface{}, error) {
 	json := make(map[string]interface{})
 	file, err := os.ReadFile(filePath)
 	if err != nil {
-		fmt.Println("Error reading file:", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("error reading file: %w", err)
 	}
-	// data := make(map[string]interface{})
+
 	err = yaml.Unmarshal(file, &json)
 	if err != nil {
-		fmt.Println("Error parsing YAML:", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("error parsing YAML: %w", err)
 	}
-	return ConvertKeysToString(json).(map[string]interface{})
+
+	converted, ok := ConvertKeysToString(json).(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("error converting keys to string")
+	}
+
+	return converted, nil
 }
 
-func ProcessWorkflow(workflowRawData map[string]interface{}) []map[string]interface{} {
+func ProcessWorkflow(workflowRawData map[string]interface{}) ([]map[string]interface{}, error) {
 	taskCollection := []map[string]interface{}{}
 
 	// Convert the interface keys to string and separate the variables from the tasks
-	variables := workflowRawData["variables"].(map[string]interface{})
-	tasks := workflowRawData["tasks"].([]interface{})
+	variables, ok := workflowRawData["variables"].(map[string]interface{})
+	if !ok {
+		fmt.Println("Error parsing variables.")
+		return nil, fmt.Errorf("error parsing variables")
+	}
+	tasks, ok := workflowRawData["tasks"].([]interface{})
+	if !ok {
+		fmt.Println("Error parsing tasks.")
+		return nil, fmt.Errorf("error parsing tasks")
+	}
 
 	// Analyze the workflow data and creates the corresponding tasks.
 	for _, task := range tasks {
@@ -106,15 +137,22 @@ func ProcessWorkflow(workflowRawData map[string]interface{}) []map[string]interf
 		}
 	}
 
-	return taskCollection
+	return taskCollection, nil
 }
 
-func ConvertKeysToString(i interface{}) interface{} {
-	switch x := i.(type) {
+// ConvertKeysToString recursively converts all keys in the input
+// to strings if they are not already.
+func ConvertKeysToString(item interface{}) interface{} {
+	switch x := item.(type) {
 	case map[interface{}]interface{}:
 		m2 := map[string]interface{}{}
 		for k, v := range x {
-			m2[k.(string)] = ConvertKeysToString(v)
+			ks, ok := k.(string)
+			if !ok {
+				fmt.Println("Key" + fmt.Sprint(k) + "is not string type. Forcing conversion.")
+				ks = fmt.Sprint(k)
+			}
+			m2[ks] = ConvertKeysToString(v)
 		}
 		return m2
 	case map[string]interface{}:
@@ -132,11 +170,15 @@ func ConvertKeysToString(i interface{}) interface{} {
 	case []map[interface{}]interface{}:
 		i2 := make([]map[string]interface{}, len(x))
 		for i, v := range x {
-			i2[i] = ConvertKeysToString(v).(map[string]interface{})
+			if vm, ok := ConvertKeysToString(v).(map[string]interface{}); ok {
+				i2[i] = vm
+			} else {
+				fmt.Println("Value" + fmt.Sprint(v) + "is not map[string]interface{} type. Skipping.")
+			}
 		}
 		return i2
 	}
-	return i
+	return item
 }
 
 func ExpandTask(task interface{}, variables map[string]interface{}) []map[string]interface{} {
@@ -228,7 +270,7 @@ func ReplacePlaceholders(item interface{}, variables map[string]interface{}) int
 		}
 		return buf.String()
 	}
-	fmt.Println("Error parsing type:" + fmt.Sprint(item))
+
 	return item
 }
 

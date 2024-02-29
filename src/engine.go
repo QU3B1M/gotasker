@@ -10,20 +10,21 @@ package main
 
 import (
 	"fmt"
+	"gotasker/src/workflow"
 	"sync"
 	"time"
 )
 
 type WorkflowProcessor struct {
-	TaskCollection []map[string]interface{}
+	TaskCollection []workflow.Task
 	DryRun         bool
 	Threads        int
 }
 
 func NewWorkflowProcessor(workflowFilePath string, dryRun bool, threads int) *WorkflowProcessor {
-	workflowFile := NewWorkflowFile(workflowFilePath, "")
+	workflowFile := workflow.NewWorkflowFile(workflowFilePath, "")
 	return &WorkflowProcessor{
-		TaskCollection: workflowFile.TaskCollection,
+		TaskCollection: workflowFile.Tasks,
 		DryRun:         dryRun,
 		Threads:        threads,
 	}
@@ -107,9 +108,12 @@ func (w *WorkflowProcessor) AbortExecution() {
 	// TODO: Implement AbortExecution
 }
 
+// // Main file to execute the workflow processor.
+// package main
+
 // func main() {
 // 	// TODO: Initialize workflowFilePath, dryRun, and threads
-// 	workflowFilePath := ""
+// 	workflowFilePath := "/home/quebim/gotasker/examples"
 // 	dryRun := false
 // 	threads := 0
 // 	workflowProcessor := NewWorkflowProcessor(workflowFilePath, dryRun, threads)

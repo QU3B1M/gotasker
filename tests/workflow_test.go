@@ -397,7 +397,10 @@ func TestProcessWorkflow(t *testing.T) {
 			"key2": "value2",
 		},
 	}
-	actual := workflow.ProcessWorkflow(input)
+	actual, err := workflow.ProcessWorkflow(input)
+	if !reflect.DeepEqual(nil, err) {
+		t.Errorf("Error at processing input. %v", err)
+	}
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("Expected %v, but got %v", expected, actual)
 	}
@@ -449,7 +452,10 @@ func TestProcessWorkflowWithForeach(t *testing.T) {
 			"key2": "var2-value2",
 		},
 	}
-	actual := workflow.ProcessWorkflow(input)
+	actual, err := workflow.ProcessWorkflow(input)
+	if !reflect.DeepEqual(nil, err) {
+		t.Errorf("Error at processing input. %v", err)
+	}
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("Expected %v, but got %v", expected, actual)
 	}
@@ -502,7 +508,10 @@ func TestProcessWorkflowWithNestedForeach(t *testing.T) {
 			"key2": "var2-value2",
 		},
 	}
-	actual := workflow.ProcessWorkflow(input)
+	actual, err := workflow.ProcessWorkflow(input)
+	if !reflect.DeepEqual(nil, err) {
+		t.Errorf("Error at processing input. %v", err)
+	}
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("Expected %v, but got %v", expected, actual)
 	}
@@ -561,7 +570,10 @@ func TestProcessWorkflowWithNestedForeachAndVariables(t *testing.T) {
 			"key2": "var2-value2",
 		},
 	}
-	actual := workflow.ProcessWorkflow(input)
+	actual, err := workflow.ProcessWorkflow(input)
+	if !reflect.DeepEqual(nil, err) {
+		t.Errorf("Error at processing input. %v", err)
+	}
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("Expected %v, but got %v", expected, actual)
 	}
@@ -620,7 +632,10 @@ func TestProcessWorkflowWithNestedForeachAndVariablesAndMap(t *testing.T) {
 			"key2": "var2-value2",
 		},
 	}
-	actual := workflow.ProcessWorkflow(input)
+	actual, err := workflow.ProcessWorkflow(input)
+	if !reflect.DeepEqual(nil, err) {
+		t.Errorf("Error at processing input. %v", err)
+	}
 	if !reflect.DeepEqual(expected, actual) {
 		t.Errorf("Expected %v, but got %v", expected, actual)
 	}

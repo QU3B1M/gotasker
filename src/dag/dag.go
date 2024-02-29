@@ -52,7 +52,7 @@ func (d *DAG) ShouldBeCanceled(taskName string) bool {
 
 func (d *DAG) buildDAG() (*graph.DependencyGraph, map[string][]string) {
 	dependencyDict := make(map[string][]string)
-	graph := graph.NewDependencyGraph()
+	graph := graph.NewGraph()
 	for _, task := range d.taskCollection {
 		taskName := task["task"].(string)
 		dependencies, ok := task["depends-on"].([]string)
@@ -147,24 +147,4 @@ func (d *DAG) createExecutionPlan(dependencyDict map[string][]string) map[string
 		executionPlan[rootTask] = getSubtaskPlan(rootTask, dependencyDict, 0)[rootTask]
 	}
 	return executionPlan
-}
-
-func main() {
-	// Test the DAG
-	taskCollection := []map[string]interface{}{
-		{"task": "task1", "depends-on": []string{}},
-		{"task": "task2", "depends-on": []string{"task1"}},
-		{"task": "task3", "depends-on": []string{"task1"}},
-		{"task": "task4", "depends-on": []string{"task2", "task3"}},
-
-		{"task": "task5", "depends-on": []string{"task4"}},
-		{"task": "task6", "depends-on": []string{"task4"}},
-	}
-	dag := NewDAG(taskCollection, false)
-	availableTasks := dag.GetAvailableTasks()
-	for _, task := range availableTasks {
-		println(task)
-	}
-	executionPlan := dag.GetExecutionPlan()
-	println(executionPlan)
 }

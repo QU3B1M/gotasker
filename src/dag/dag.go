@@ -37,6 +37,10 @@ func (d *DAG) GetAvailableTasks() []string {
 	return d.graph.TopSorted()
 }
 
+func (d *DAG) GetDependencyTree() map[string][]string {
+	return d.dependencyTree
+}
+
 func (d *DAG) GetExecutionPlan() map[string]interface{} {
 	return d.executionPlan
 }
@@ -45,9 +49,31 @@ func (d *DAG) SetStatus(taskName string, status string) {
 	d.finishedTasksStatus[status][taskName] = struct{}{}
 }
 
-func (d *DAG) ShouldBeCanceled(taskName string) bool {
-	_, ok := d.toBeCanceled[taskName]
-	return ok
+func (d *DAG) GetStatus(taskName string) string {
+	if _, ok := d.finishedTasksStatus["successful"][taskName]; ok {
+		return "successful"
+	} else if _, ok := d.finishedTasksStatus["failed"][taskName]; ok {
+		return "failed"
+	} else if _, ok := d.finishedTasksStatus["canceled"][taskName]; ok {
+		return "canceled"
+	}
+	return "pending"
+}
+
+func (d *DAG) CancelTask(taskName string) bool {
+	if d.GetStatus(taskName) == "pending" {
+		d.toBeCanceled[taskName] = struct{}{}
+		return true
+	}
+	return false
+}
+
+func (d *DAG) CancelDependentTasks(taskName string, cancelPolicy string) {
+	d.cancelDependantTasks(taskName, cancelPolicy)
+}
+
+func (d *DAG) GetTasksToCancel() map[string]struct{} {
+	return d.toBeCanceled
 }
 
 func (d *DAG) buildDAG() (*graph.DependencyGraph, map[string][]string) {

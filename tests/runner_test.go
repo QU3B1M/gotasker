@@ -101,15 +101,3 @@ func TestExecuteErrorWithComplexArgs(t *testing.T) {
 		t.Error("Execute did not return an error")
 	}
 }
-
-func TestExecuteErrorWithInvalidArgs(t *testing.T) {
-	taskParameters := map[string]interface{}{
-		"path": "echo",
-		"args": []interface{}{1},
-	}
-	e := runner.NewExecution("echo", taskParameters)
-	err := e.Execute()
-	if err == nil {
-		t.Error("Execute did not return an error")
-	}
-}

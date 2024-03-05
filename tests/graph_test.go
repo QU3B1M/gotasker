@@ -3,6 +3,7 @@ package tests
 import (
 	"gotasker/src/graph"
 	"reflect"
+	"sort"
 	"testing"
 )
 
@@ -96,7 +97,18 @@ func TestTopSortedLayers(t *testing.T) {
 	g.DependOn("c", "e")
 	g.DependOn("d", "e")
 	layers := g.TopSortedLayers()
-	if !reflect.DeepEqual(layers, [][]string{{"e"}, {"c", "d"}, {"b"}, {"a"}}) {
+
+	// Sort the layers before comparing
+	for _, layer := range layers {
+		sort.Strings(layer)
+	}
+
+	expected := [][]string{{"e"}, {"c", "d"}, {"b"}, {"a"}}
+	for _, layer := range expected {
+		sort.Strings(layer)
+	}
+
+	if !reflect.DeepEqual(layers, expected) {
 		t.Error("TopSortedLayers did not return the expected result")
 	}
 }

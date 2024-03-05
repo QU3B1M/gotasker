@@ -1,4 +1,5 @@
-package main
+// Package to execute tasks on the system. It uses the os/exec package to execute the tasks.
+package runner
 
 import (
 	"fmt"

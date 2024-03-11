@@ -14,49 +14,46 @@ type Runner interface {
 
 // Execution represents a task to be executed.
 type Execution struct {
-	// TaskName is the name of the task.
-	TaskName string
-	// TaskParameters are the parameters for the task.
-	TaskParameters map[string]interface{}
+	// CommandName is the name of the command to be executed.
+	CommandName string
+	// CommandParams are the parameters for the task.
+	CommandParams map[string]interface{}
 }
 
 // NewExecution creates a new Execution with the given task name and parameters.
-func NewExecution(taskName string, taskParameters map[string]interface{}) *Execution {
+func NewExecution(name string, parameters map[string]interface{}) *Execution {
 	return &Execution{
-		TaskName:       taskName,
-		TaskParameters: taskParameters,
+		CommandName:   name,
+		CommandParams: parameters,
 	}
 }
 
 // Execute runs the task with its parameters. It returns an error if the execution fails.
-func (e *Execution) Execute() error {
-	var taskArgs []string
-	for _, arg := range e.TaskParameters["args"].([]interface{}) {
+func (e *Execution) Execute() ([]byte, error) {
+	var args []string
+	for _, arg := range e.CommandParams["args"].([]interface{}) {
 		switch v := arg.(type) {
 		case string:
-			taskArgs = append(taskArgs, v)
+			args = append(args, v)
 		case map[string]interface{}:
 			for key, value := range v {
 				switch val := value.(type) {
 				case []interface{}:
 					for _, argvalue := range val {
-						taskArgs = append(taskArgs, fmt.Sprintf("--%s=%v", key, argvalue))
+						args = append(args, fmt.Sprintf("--%s=%v", key, argvalue))
 					}
 				default:
-					taskArgs = append(taskArgs, fmt.Sprintf("--%s=%v", key, val))
+					args = append(args, fmt.Sprintf("--%s=%v", key, val))
 				}
 			}
 		}
 	}
 
-	cmd := exec.Command(e.TaskParameters["path"].(string), taskArgs...)
+	cmd := exec.Command(e.CommandName, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("error executing process task: %v", err)
+		return nil, fmt.Errorf("error executing process task: %v", err)
 	}
 
-	fmt.Printf("Finish task: %s\n", e.TaskName)
-	fmt.Println(string(output))
-
-	return nil
+	return output, nil
 }

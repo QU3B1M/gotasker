@@ -6,43 +6,43 @@ import (
 )
 
 func TestNewExecution(t *testing.T) {
-	taskParameters := map[string]interface{}{
-		"path": "echo",
+	name := "echo"
+	params := map[string]interface{}{
 		"args": []interface{}{"hello", "world"},
 	}
-	e := runner.NewExecution("echo", taskParameters)
+	e := runner.NewExecution(name, params)
 	if e == nil {
 		t.Error("NewExecution returned nil")
 	}
 }
 
 func TestExecute(t *testing.T) {
-	taskParameters := map[string]interface{}{
-		"path": "echo",
+	name := "echo"
+	params := map[string]interface{}{
 		"args": []interface{}{"hello", "world"},
 	}
-	e := runner.NewExecution("echo", taskParameters)
-	err := e.Execute()
+	e := runner.NewExecution(name, params)
+	_, err := e.Execute()
 	if err != nil {
 		t.Errorf("Execute returned an error: %v", err)
 	}
 }
 
 func TestExecuteMultipleArgs(t *testing.T) {
-	taskParameters := map[string]interface{}{
-		"path": "echo",
+	name := "echo"
+	params := map[string]interface{}{
 		"args": []interface{}{"hello", "world", "foo", "bar"},
 	}
-	e := runner.NewExecution("echo", taskParameters)
-	err := e.Execute()
+	e := runner.NewExecution(name, params)
+	_, err := e.Execute()
 	if err != nil {
 		t.Errorf("Execute returned an error: %v", err)
 	}
 }
 
 func TestExecuteComplex(t *testing.T) {
-	taskParameters := map[string]interface{}{
-		"path": "echo",
+	name := "echo"
+	params := map[string]interface{}{
 		"args": []interface{}{
 			"hello",
 			"world",
@@ -52,40 +52,40 @@ func TestExecuteComplex(t *testing.T) {
 			},
 		},
 	}
-	e := runner.NewExecution("echo", taskParameters)
-	err := e.Execute()
+	e := runner.NewExecution(name, params)
+	_, err := e.Execute()
 	if err != nil {
 		t.Errorf("Execute returned an error: %v", err)
 	}
 }
 
 func TestExecuteError(t *testing.T) {
-	taskParameters := map[string]interface{}{
-		"path": "nonexistent",
+	name := "nonexistent"
+	params := map[string]interface{}{
 		"args": []interface{}{},
 	}
-	e := runner.NewExecution("nonexistent", taskParameters)
-	err := e.Execute()
+	e := runner.NewExecution(name, params)
+	_, err := e.Execute()
 	if err == nil {
 		t.Error("Execute did not return an error")
 	}
 }
 
 func TestExecuteErrorWithArgs(t *testing.T) {
-	taskParameters := map[string]interface{}{
-		"path": "nonexistent",
+	name := "nonexistent"
+	params := map[string]interface{}{
 		"args": []interface{}{"hello", "world"},
 	}
-	e := runner.NewExecution("nonexistent", taskParameters)
-	err := e.Execute()
+	e := runner.NewExecution(name, params)
+	_, err := e.Execute()
 	if err == nil {
 		t.Error("Execute did not return an error")
 	}
 }
 
 func TestExecuteErrorWithComplexArgs(t *testing.T) {
-	taskParameters := map[string]interface{}{
-		"path": "nonexistent",
+	name := "nonexistent"
+	params := map[string]interface{}{
 		"args": []interface{}{
 			"hello",
 			"world",
@@ -95,8 +95,8 @@ func TestExecuteErrorWithComplexArgs(t *testing.T) {
 			},
 		},
 	}
-	e := runner.NewExecution("nonexistent", taskParameters)
-	err := e.Execute()
+	e := runner.NewExecution(name, params)
+	_, err := e.Execute()
 	if err == nil {
 		t.Error("Execute did not return an error")
 	}

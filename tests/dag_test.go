@@ -169,3 +169,140 @@ func TestCancelTask(t *testing.T) {
 // 		t.Error("CancelDependentTasks did not set the dependent task to cancel")
 // 	}
 // }
+
+//  Test GetDependencyTree
+
+// func TestGetDependencyTree(t *testing.T) {
+// 	taskCollection := []map[string]interface{}{
+// 		{
+// 			"task":       "a",
+// 			"depends-on": []string{"b"},
+// 		},
+// 		{
+// 			"task":       "b",
+// 			"depends-on": []string{},
+// 		},
+// 		{
+// 			"task":       "c",
+// 			"depends-on": []string{"a"},
+// 		},
+// 	}
+// 	expected := map[string][]string{
+// 		"a": {"b"},
+// 		"b": {},
+// 		"c": {"a"},
+// 	}
+// 	d := dag.NewDAG(taskCollection, false)
+// 	dependencyTree := d.GetDependencyTree()
+// 	if !reflect.DeepEqual(dependencyTree, expected) {
+// 		t.Errorf("GetDependencyTree returned: %v, expected: %v", dependencyTree, expected)
+// 	}
+// }
+
+// GetExecutionPlan
+
+func TestGetExecutionPlanLayered(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{"b"},
+		},
+		{
+			"task":       "b",
+			"depends-on": []string{},
+		},
+		{
+			"task":       "c",
+			"depends-on": []string{"a"},
+		},
+	}
+	expected := map[string]interface{}{
+		"c": map[string]interface{}{
+			"a": map[string]interface{}{
+				"b": map[string]interface{}{},
+			},
+		},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	executionPlan := d.GetExecutionPlan()
+	if !reflect.DeepEqual(executionPlan, expected) {
+		t.Errorf("GetExecutionPlan returned: %v, expected: %v", executionPlan, expected)
+	}
+}
+
+func TestGetExecutionPlanSingle(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{},
+		},
+	}
+	expected := map[string]interface{}{
+		"a": map[string]interface{}{},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	executionPlan := d.GetExecutionPlan()
+	if !reflect.DeepEqual(executionPlan, expected) {
+		t.Errorf("GetExecutionPlan returned: %v, expected: %v", executionPlan, expected)
+	}
+}
+
+func TestGetExecutionPlanMultiple(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{},
+		},
+		{
+			"task":       "b",
+			"depends-on": []string{},
+		},
+	}
+	expected := map[string]interface{}{
+		"a": map[string]interface{}{},
+		"b": map[string]interface{}{},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	executionPlan := d.GetExecutionPlan()
+	if !reflect.DeepEqual(executionPlan, expected) {
+		t.Errorf("GetExecutionPlan returned: %v, expected: %v", executionPlan, expected)
+	}
+}
+
+func TestGetExecutionPlanComplex(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{"b"},
+		},
+		{
+			"task":       "b",
+			"depends-on": []string{},
+		},
+		{
+			"task":       "c",
+			"depends-on": []string{"a"},
+		},
+		{
+			"task":       "d",
+			"depends-on": []string{"a"},
+		},
+	}
+	expected := map[string]interface{}{
+		"c": map[string]interface{}{
+			"a": map[string]interface{}{
+				"b": map[string]interface{}{},
+			},
+		},
+		"d": map[string]interface{}{
+			"a": map[string]interface{}{
+				"b": map[string]interface{}{},
+			},
+		},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	executionPlan := d.GetExecutionPlan()
+	if !reflect.DeepEqual(executionPlan, expected) {
+		t.Errorf("GetExecutionPlan returned: %v, expected: %v", executionPlan, expected)
+	}
+}

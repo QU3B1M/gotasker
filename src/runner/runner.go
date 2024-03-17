@@ -29,7 +29,7 @@ func NewExecution(name string, parameters map[string]interface{}) *Execution {
 }
 
 // Execute runs the task with its parameters. It returns an error if the execution fails.
-func (e *Execution) Execute() ([]byte, error) {
+func (e *Execution) Execute() (string, error) {
 	var args []string
 	for _, arg := range e.CommandParams["args"].([]interface{}) {
 		switch v := arg.(type) {
@@ -52,8 +52,8 @@ func (e *Execution) Execute() ([]byte, error) {
 	cmd := exec.Command(e.CommandName, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("error executing process task: %v", err)
+		return "", fmt.Errorf("error executing process task: %v", err)
 	}
 
-	return output, nil
+	return string(output[:]), nil
 }

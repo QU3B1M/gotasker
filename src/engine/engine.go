@@ -1,4 +1,7 @@
-// Engine package is responsible for starting and executing the workflow. It uses the graph package to create a directed acyclic graph (DAG) and execute tasks in parallel. The engine package contains the following files:
+// Package engine is responsible for starting and executing the workflow.
+// It uses the graph package to create a directed acyclic graph (DAG) and
+//
+//	execute tasks in parallel. The engine package contains the following files:
 package engine
 
 import (
@@ -41,20 +44,24 @@ func (w *Engine) ExecuteTask(task map[string]interface{}) {
 }
 
 // ExecuteTasksParallel uses dag.TopSortedLayers to get the tasks that can be executed in parallel (the cases where the task is a list of string)
-func (w *Engine) ExecuteTaskLayerParallel() {
-	availableTasks := w.DAG.GetExecutionPlan()
-	for _, task := range availableTasks {
-		print(task)
-		for _, t := range w.TaskCollection {
-			print(t)
-		}
-	}
-}
+// func (w *Engine) ExecuteTaskLayerParallel() {
+// 	availableTasks := w.DAG.GetExecutionPlan()
+// 	for _, task := range availableTasks {
+// 		for _, t := range w.TaskCollection {
+// 			if t.Name == task.(string) {
+// 				var command []map[string]interface{}
+// 				jsonTasks, _ := json.Marshal(&t)
+// 				_ = json.Unmarshal(jsonTasks, &tasks)
+// 				w.ExecuteTask(t.(map[string]interface{}))
+// 			}
+// 		}
+// 	}
+// }
 
 // Run starts the workflow processor and executes all tasks.
-func (w *Engine) Run() {
-	w.ExecuteTaskLayerParallel()
-}
+// func (w *Engine) Run() {
+// 	w.ExecuteTaskLayerParallel()
+// }
 
 // AbortExecution aborts the execution of the workflow processor.
 func (w *Engine) AbortExecution() {

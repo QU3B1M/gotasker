@@ -1,3 +1,5 @@
+// Package dag is responsible for creating a directed acyclic graph (DAG)
+// from a given task collection.
 package dag
 
 import "gotasker/src/graph"

@@ -15,23 +15,22 @@ jobs:
       with:
         go-version: '^1.22.0'
 
-    - name: Setup GO environment
+    - name: Install GO linter
       run: |
-            go mod download
-            go get -u golang.org/x/lint/golint
+            apt-get install golint
     
-    - name: Lint
+    - name: Run linter
       run: |
         golint -set_exit_status ./...
 
-    - name: Vet
+    - name: Run go vet
       run: |
         go vet ./...
 
-    - name: Unit tests
+    - name: Execute unit tests
       run: |
-            sudo go test ./... -coverprofile coverage.out -covermode count
-            sudo go tool cover -func coverage.out
+            go test ./... -coverprofile coverage.out -covermode count
+            go tool cover -func coverage.out
 
     - name: Quality Gate - Test coverage shall be above threshold
       env:

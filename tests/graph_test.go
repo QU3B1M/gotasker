@@ -10,7 +10,7 @@ import (
 func TestNewGraph(t *testing.T) {
 	g := graph.NewGraph()
 	if g == nil {
-		t.Error("NewGraph returned nil")
+		t.Error("NewGraph returned", g, "expected a graph")
 	}
 }
 
@@ -18,23 +18,27 @@ func TestDependOn(t *testing.T) {
 	g := graph.NewGraph()
 	err := g.DependOn("a", "b")
 	if err != nil {
-		t.Error("DependOn returned an error")
+		t.Error("DependOn returned", err, "expected 'nil'")
 	}
 }
 
 func TestDependsOn(t *testing.T) {
 	g := graph.NewGraph()
 	g.DependOn("a", "b")
-	if !g.DependsOn("a", "b") {
-		t.Error("DependsOn returned false")
+	expected := true
+	result := g.DependsOn("a", "b")
+	if result != expected {
+		t.Error("DependsOn returned ", result, " expected ", expected)
 	}
 }
 
 func TestHasDependent(t *testing.T) {
 	g := graph.NewGraph()
 	g.DependOn("a", "b")
-	if !g.HasDependent("b", "a") {
-		t.Error("HasDependent returned false")
+	expected := true
+	result := g.HasDependent("b", "a")
+	if result != expected {
+		t.Error("HasDependent returned ", result, " expected ", expected)
 	}
 }
 
@@ -42,7 +46,7 @@ func TestDependOnSelf(t *testing.T) {
 	g := graph.NewGraph()
 	err := g.DependOn("a", "a")
 	if err == nil {
-		t.Error("DependOn did not return an error")
+		t.Error("DependOn returned", err, "expected 'error'")
 	}
 }
 
@@ -52,7 +56,7 @@ func TestDependOnCircular(t *testing.T) {
 	g.DependOn("b", "c")
 	err := g.DependOn("c", "a")
 	if err == nil {
-		t.Error("DependOn did not return an error")
+		t.Error("DependOn returned", err, "expected 'error'")
 	}
 }
 
@@ -83,9 +87,10 @@ func TestLeaves(t *testing.T) {
 	g.DependOn("w", "x")
 	g.DependOn("x", "y")
 	g.DependOn("y", "z")
+	expected := []string{"z"}
 	leaves := g.Leaves()
-	if !reflect.DeepEqual(leaves, []string{"z"}) {
-		t.Error("Leaves did not return the expected result")
+	if !reflect.DeepEqual(leaves, expected) {
+		t.Error("Leaves returned", leaves, "expected", expected)
 	}
 }
 
@@ -96,20 +101,20 @@ func TestTopSortedLayers(t *testing.T) {
 	g.DependOn("b", "d")
 	g.DependOn("c", "e")
 	g.DependOn("d", "e")
-	layers := g.TopSortedLayers()
 
 	// Sort the layers before comparing
-	for _, layer := range layers {
-		sort.Strings(layer)
-	}
-
 	expected := [][]string{{"e"}, {"c", "d"}, {"b"}, {"a"}}
 	for _, layer := range expected {
 		sort.Strings(layer)
 	}
 
+	layers := g.TopSortedLayers()
+	for _, layer := range layers {
+		sort.Strings(layer)
+	}
+
 	if !reflect.DeepEqual(layers, expected) {
-		t.Error("TopSortedLayers did not return the expected result")
+		t.Error("TopSortedLayers returned", layers, "expected", expected)
 	}
 }
 
@@ -118,9 +123,11 @@ func TestTopSortedLayersCircular(t *testing.T) {
 	g.DependOn("a", "b")
 	g.DependOn("b", "c")
 	g.DependOn("c", "a") // Circular is ignored
+	expected := [][]string{{"c"}, {"b"}, {"a"}}
 	layers := g.TopSortedLayers()
-	if !reflect.DeepEqual(layers, [][]string{{"c"}, {"b"}, {"a"}}) {
-		t.Error("TopSortedLayers did not return the expected result")
+
+	if !reflect.DeepEqual(layers, expected) {
+		t.Error("TopSortedLayers returned", layers, "expected", expected)
 	}
 }
 
@@ -130,12 +137,12 @@ func TestTopSorted(t *testing.T) {
 	g := graph.NewGraph()
 	g.DependOn("a", "b")
 	g.DependOn("b", "c")
-	g.DependOn("b", "d")
-	g.DependOn("c", "e")
-	g.DependOn("d", "e")
+	g.DependOn("c", "d")
+	expected := []string{"d", "c", "b", "a"}
 	sorted := g.TopSorted()
-	if !reflect.DeepEqual(sorted, []string{"e", "c", "d", "b", "a"}) {
-		t.Error("TopSorted did not return the expected result")
+
+	if !reflect.DeepEqual(sorted, expected) {
+		t.Error("TopSorted returned", sorted, "expected", expected)
 	}
 }
 
@@ -144,9 +151,11 @@ func TestTopSortedCircular(t *testing.T) {
 	g.DependOn("a", "b")
 	g.DependOn("b", "c")
 	g.DependOn("c", "a") // Circular is ignored
+	expected := []string{"c", "b", "a"}
 	sorted := g.TopSorted()
-	if !reflect.DeepEqual(sorted, []string{"c", "b", "a"}) {
-		t.Error("TopSorted did not return the expected result")
+
+	if !reflect.DeepEqual(sorted, expected) {
+		t.Error("TopSorted returned", sorted, "expected", expected)
 	}
 }
 
@@ -154,12 +163,12 @@ func TestTopSortedMultiple(t *testing.T) {
 	g := graph.NewGraph()
 	g.DependOn("a", "b")
 	g.DependOn("b", "c")
-	g.DependOn("b", "d")
-	g.DependOn("c", "e")
+	g.DependOn("c", "d")
 	g.DependOn("d", "e")
+	expected := []string{"e", "d", "c", "b", "a"}
 	sorted := g.TopSorted()
-	if !reflect.DeepEqual(sorted, []string{"e", "c", "d", "b", "a"}) {
-		t.Error("TopSorted did not return the expected result")
+	if !reflect.DeepEqual(sorted, expected) {
+		t.Error("TopSorted returned", sorted, "expected", expected)
 	}
 }
 
@@ -168,8 +177,9 @@ func TestTopSortedMultipleCircular(t *testing.T) {
 	g.DependOn("a", "b")
 	g.DependOn("b", "c")
 	g.DependOn("c", "a") // Circular is ignored
+	expected := []string{"c", "b", "a"}
 	sorted := g.TopSorted()
-	if !reflect.DeepEqual(sorted, []string{"c", "b", "a"}) {
-		t.Error("TopSorted did not return the expected result")
+	if !reflect.DeepEqual(sorted, expected) {
+		t.Error("TopSorted returned", sorted, "expected", expected)
 	}
 }

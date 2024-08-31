@@ -1,4 +1,4 @@
-name: Execute GoTasker Unit Tests
+name: Execute linter, unit tests, and check its coverage.
 on: 
   push:
     branches: 
@@ -7,7 +7,7 @@ on:
       - "**/*.md"
   
 jobs:
-  test:
+  quality-assurance:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4

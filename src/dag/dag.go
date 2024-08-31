@@ -1,12 +1,8 @@
-// This Go code does the same thing as your Python code. It defines a DAG struct with methods to build a
-// directed acyclic graph (DAG) from a collection of tasks, get available tasks, set the status of a task,
-// check if a task should be canceled, cancel dependent tasks, and create an execution plan. The topsort
-// package is used to create and manipulate the DAG.
-
 package dag
 
 import "gotasker/src/graph"
 
+// DAG represents a directed acyclic graph with tasks and their dependencies.
 type DAG struct {
 	taskCollection      []map[string]interface{}
 	reverse             bool
@@ -17,6 +13,8 @@ type DAG struct {
 	executionPlan       map[string]interface{}
 }
 
+// NewDAG creates a new DAG instance with the given task collection.
+// The reverse parameter is used to determine the direction of the graph.
 func NewDAG(taskCollection []map[string]interface{}, reverse bool) *DAG {
 	d := &DAG{
 		taskCollection: taskCollection,
@@ -33,22 +31,27 @@ func NewDAG(taskCollection []map[string]interface{}, reverse bool) *DAG {
 	return d
 }
 
+// GetAvailableTasks returns the list of tasks that are available for execution.
 func (d *DAG) GetAvailableTasks() []string {
 	return d.graph.TopSorted()
 }
 
+// GetDependencyTree returns the dependency tree of tasks.
 func (d *DAG) GetDependencyTree() map[string][]string {
 	return d.dependencyTree
 }
 
+// GetExecutionPlan returns the execution plan for the tasks.
 func (d *DAG) GetExecutionPlan() map[string]interface{} {
 	return d.executionPlan
 }
 
+// SetStatus sets the status of a given task.
 func (d *DAG) SetStatus(taskName string, status string) {
 	d.finishedTasksStatus[status][taskName] = struct{}{}
 }
 
+// GetStatus returns the status of a given task.
 func (d *DAG) GetStatus(taskName string) string {
 	if _, ok := d.finishedTasksStatus["successful"][taskName]; ok {
 		return "successful"
@@ -60,6 +63,7 @@ func (d *DAG) GetStatus(taskName string) string {
 	return "pending"
 }
 
+// CancelTask marks a task for cancellation if it is still pending.
 func (d *DAG) CancelTask(taskName string) bool {
 	if d.GetStatus(taskName) == "pending" {
 		d.toBeCanceled[taskName] = struct{}{}
@@ -68,14 +72,17 @@ func (d *DAG) CancelTask(taskName string) bool {
 	return false
 }
 
+// CancelDependentTasks cancels tasks dependent on the given task based on the cancel policy.
 func (d *DAG) CancelDependentTasks(taskName string, cancelPolicy string) {
 	d.cancelDependantTasks(taskName, cancelPolicy)
 }
 
+// GetTasksToCancel returns the tasks that are marked to be canceled.
 func (d *DAG) GetTasksToCancel() map[string]struct{} {
 	return d.toBeCanceled
 }
 
+// buildDAG constructs the dependency graph and dependency tree from the task collection.
 func (d *DAG) buildDAG() (*graph.DependencyGraph, map[string][]string) {
 	dependencyDict := make(map[string][]string)
 	graph := graph.NewGraph()
@@ -97,6 +104,7 @@ func (d *DAG) buildDAG() (*graph.DependencyGraph, map[string][]string) {
 	return graph, dependencyDict
 }
 
+// getAllTaskSet returns a set of all tasks from the given map.
 func getAllTaskSet(tasks map[string]struct{}) map[string]struct{} {
 	taskSet := make(map[string]struct{})
 	for task := range tasks {
@@ -105,6 +113,7 @@ func getAllTaskSet(tasks map[string]struct{}) map[string]struct{} {
 	return taskSet
 }
 
+// cancelDependantTasks cancels dependent tasks based on the given cancel policy.
 func (d *DAG) cancelDependantTasks(taskName string, cancelPolicy string) {
 	if cancelPolicy == "continue" {
 		return
@@ -134,6 +143,7 @@ func (d *DAG) cancelDependantTasks(taskName string, cancelPolicy string) {
 	}
 }
 
+// getSubtaskPlan generates a subtask plan for a given task based on its dependencies.
 func getSubtaskPlan(taskName string, dependencyDict map[string][]string, level int) map[string]interface{} {
 	dependencies, ok := dependencyDict[taskName]
 	if !ok {
@@ -147,8 +157,10 @@ func getSubtaskPlan(taskName string, dependencyDict map[string][]string, level i
 	return plan
 }
 
+// createExecutionPlan constructs an execution plan for the tasks based on their dependencies.
 func (d *DAG) createExecutionPlan(dependencyDict map[string][]string) map[string]interface{} {
 	executionPlan := make(map[string]interface{})
+	// getRootTasks identifies the root tasks that have no dependencies.
 	getRootTasks := func(dependencyDict map[string][]string) []string {
 		allTasks := make(map[string]struct{})
 		for k := range dependencyDict {

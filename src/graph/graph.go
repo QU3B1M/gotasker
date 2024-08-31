@@ -1,33 +1,37 @@
+// Package graph provides a simple directed acyclic graph (DAG) implementation.
 // Using the code from github.com/kendru/darwin/blob/main/go/depgraph/ as base
-// Copied the code from the above link in order to modify it if required.
 package graph
 
 import (
 	"errors"
 )
 
-// A node in this graph is just a string, so a nodeset is a map whose
-// keys are the nodes that are present.
-type nodeset map[string]struct{}
+// Nodeset is a map of nodes, in this graph a node is just a string,
+// keys are the parent nodes.
+type Nodeset map[string]struct{}
 
 // depmap tracks the nodes that have some dependency relationship to
 // some other node, represented by the key of the map.
-type depmap map[string]nodeset
+type depmap map[string]Nodeset
 
+// DependencyGraph represents a directed graph with dependencies and dependents.
 type DependencyGraph struct {
-	nodes        nodeset
+	nodes        Nodeset
 	dependencies depmap // `dependencies` tracks child -> parents.
 	dependents   depmap // `dependents` tracks parent -> children.
 }
 
+// NewGraph creates a new DependencyGraph instance.
 func NewGraph() *DependencyGraph {
 	return &DependencyGraph{
 		dependencies: make(depmap),
 		dependents:   make(depmap),
-		nodes:        make(nodeset),
+		nodes:        make(Nodeset),
 	}
 }
 
+// DependOn adds a dependency relationship where 'child' depends on 'parent'.
+// Returns an error if the relationship is self-referential or creates a circular dependency.
 func (g *DependencyGraph) DependOn(child, parent string) error {
 	if child == parent {
 		return errors.New("self-referential dependencies not allowed")
@@ -48,18 +52,21 @@ func (g *DependencyGraph) DependOn(child, parent string) error {
 	return nil
 }
 
+// DependsOn checks if 'child' depends on 'parent'.
 func (g *DependencyGraph) DependsOn(child, parent string) bool {
 	deps := g.Dependencies(child)
 	_, ok := deps[parent]
 	return ok
 }
 
+// HasDependent checks if 'parent' has 'child' as a dependent.
 func (g *DependencyGraph) HasDependent(parent, child string) bool {
 	deps := g.Dependents(parent)
 	_, ok := deps[child]
 	return ok
 }
 
+// Leaves returns a list of nodes that have no dependencies.
 func (g *DependencyGraph) Leaves() []string {
 	leaves := make([]string, 0)
 
@@ -72,6 +79,7 @@ func (g *DependencyGraph) Leaves() []string {
 	return leaves
 }
 
+// TopSortedLayers returns the nodes of the graph sorted in layers, where each layer contains nodes with no dependencies.
 func (g *DependencyGraph) TopSortedLayers() [][]string {
 	layers := [][]string{}
 
@@ -92,18 +100,20 @@ func (g *DependencyGraph) TopSortedLayers() [][]string {
 	return layers
 }
 
+// removeFromDepmap removes a node from the dependency map.
 func removeFromDepmap(dm depmap, key, node string) {
 	nodes := dm[key]
 	if len(nodes) == 1 {
-		// The only element in the nodeset must be `node`, so we
+		// The only element in the Nodeset must be `node`, so we
 		// can delete the entry entirely.
 		delete(dm, key)
 	} else {
-		// Otherwise, remove the single node from the nodeset.
+		// Otherwise, remove the single node from the Nodeset.
 		delete(nodes, node)
 	}
 }
 
+// remove removes a node and all its edges from the graph.
 func (g *DependencyGraph) remove(node string) {
 	// Remove edges from things that depend on `node`.
 	for dependent := range g.dependents[node] {
@@ -138,22 +148,27 @@ func (g *DependencyGraph) TopSorted() []string {
 	return allNodes
 }
 
-func (g *DependencyGraph) Dependencies(child string) nodeset {
+// Dependencies returns all transitive dependencies of the given child node.
+func (g *DependencyGraph) Dependencies(child string) Nodeset {
 	return g.buildTransitive(child, g.immediateDependencies)
 }
 
-func (g *DependencyGraph) immediateDependencies(node string) nodeset {
+// immediateDependencies returns the immediate dependencies of the given node.
+func (g *DependencyGraph) immediateDependencies(node string) Nodeset {
 	return g.dependencies[node]
 }
 
-func (g *DependencyGraph) Dependents(parent string) nodeset {
+// Dependents returns all transitive dependents of the given parent node.
+func (g *DependencyGraph) Dependents(parent string) Nodeset {
 	return g.buildTransitive(parent, g.immediateDependents)
 }
 
-func (g *DependencyGraph) immediateDependents(node string) nodeset {
+// immediateDependents returns the immediate dependents of the given node.
+func (g *DependencyGraph) immediateDependents(node string) Nodeset {
 	return g.dependents[node]
 }
 
+// clone creates a deep copy of the DependencyGraph.
 func (g *DependencyGraph) clone() *DependencyGraph {
 	return &DependencyGraph{
 		dependencies: copyDepmap(g.dependencies),
@@ -162,13 +177,14 @@ func (g *DependencyGraph) clone() *DependencyGraph {
 	}
 }
 
-func (g *DependencyGraph) buildTransitive(root string, nextFn func(string) nodeset) nodeset {
+// buildTransitive builds a transitive closure of nodes starting from the root node.
+func (g *DependencyGraph) buildTransitive(root string, nextFn func(string) Nodeset) Nodeset {
 	if _, ok := g.nodes[root]; !ok {
 		// The root node is not in the graph, so there are no dependencies.
 		return nil
 	}
 
-	out := make(nodeset)
+	out := make(Nodeset)
 	searchNext := []string{root}
 	for len(searchNext) > 0 {
 		// List of new nodes from this layer of the dependency graph. This is
@@ -191,14 +207,16 @@ func (g *DependencyGraph) buildTransitive(root string, nextFn func(string) nodes
 	return out
 }
 
-func copyNodeset(s nodeset) nodeset {
-	out := make(nodeset, len(s))
+// copyNodeset creates a deep copy of a Nodeset.
+func copyNodeset(s Nodeset) Nodeset {
+	out := make(Nodeset, len(s))
 	for k, v := range s {
 		out[k] = v
 	}
 	return out
 }
 
+// copyDepmap creates a deep copy of a depmap.
 func copyDepmap(m depmap) depmap {
 	out := make(depmap, len(m))
 	for k, v := range m {
@@ -207,10 +225,11 @@ func copyDepmap(m depmap) depmap {
 	return out
 }
 
+// addNodeToNodeset adds a node to the Nodeset in the depmap.
 func addNodeToNodeset(dm depmap, key, node string) {
 	nodes, ok := dm[key]
 	if !ok {
-		nodes = make(nodeset)
+		nodes = make(Nodeset)
 		dm[key] = nodes
 	}
 	nodes[node] = struct{}{}

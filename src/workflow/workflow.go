@@ -1,12 +1,4 @@
-// This Go code does the same thing as your Python code. It defines a Workflow struct with methods to
-// load a workflow from a file, process the workflow into a collection of tasks, and expand tasks with
-// variable values. The ReplacePlaceholders function is used to replace placeholders in a task with actual
-// variable values. The product function is used to generate all combinations of variable values for tasks
-// with a ‘foreach’ field.
-
-// Please replace "./workflow.yaml" with your actual workflow file path. Also, replace "./schemas/schema_v1.json"
-// with your actual json file path if you have one.
-
+// Package workflow is responsible for processing the workflow file and creating the tasks.
 package workflow
 
 import (
@@ -19,6 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Task represents a task in the workflow with its dependencies and actions.
 type Task struct {
 	Name      string    `json:"name"`
 	Do        Action    `json:"do"`
@@ -27,23 +20,27 @@ type Task struct {
 	ForEach   []ForEach `json:"foreach"`
 }
 
+// Action represents an action to be performed with its parameters.
 type Action struct {
 	This string `json:"this"`
 	With With   `json:"with"`
 }
 
+// With represents the parameters for an action.
 type With struct {
 	This string        `json:"this"`
 	Args []interface{} `json:"args"`
 	Path string        `json:"path"`
 }
 
+// ForEach represents a foreach loop in the workflow.
 type ForEach struct {
 	Variable string    `json:"variable"`
 	As       string    `json:"as"`
 	ForEach  []ForEach `json:"foreach"`
 }
 
+// Workflow represents a workflow with tasks and variables.
 type Workflow struct {
 	Tasks     []Task      `json:"tasks"`
 	Variables interface{} `json:"variables"`
@@ -110,6 +107,8 @@ func loadWorkflowFile(filePath string) (map[string]interface{}, error) {
 	return converted, nil
 }
 
+// ProcessWorkflow processes the raw workflow data and returns a collection of tasks.
+// It can return an error if there's a problem with parsing the variables or tasks.
 func ProcessWorkflow(workflowRawData map[string]interface{}) ([]map[string]interface{}, error) {
 	taskCollection := []map[string]interface{}{}
 
@@ -181,6 +180,7 @@ func ConvertKeysToString(item interface{}) interface{} {
 	return item
 }
 
+// ExpandTask expands a task with foreach loops into multiple tasks based on the variables.
 func ExpandTask(task interface{}, variables map[string]interface{}) []map[string]interface{} {
 	iterator := task.(map[string]interface{})["foreach"].([]interface{})
 	foreachMap := make([]map[string]interface{}, len(iterator))
@@ -229,6 +229,7 @@ func ExpandTask(task interface{}, variables map[string]interface{}) []map[string
 	return newTasks
 }
 
+// ReplacePlaceholders replaces placeholders in the item with actual values from the variables.
 func ReplacePlaceholders(item interface{}, variables map[string]interface{}) interface{} {
 	switch x := item.(type) {
 	case map[string]interface{}:
@@ -274,6 +275,9 @@ func ReplacePlaceholders(item interface{}, variables map[string]interface{}) int
 	return item
 }
 
+// product generates the Cartesian product of a slice of slices.
+// It returns a slice of slices, where each inner slice is a combination
+// of elements from the input slices.
 func product(arrays [][]interface{}) [][]interface{} {
 	length := len(arrays)
 	if length == 0 {

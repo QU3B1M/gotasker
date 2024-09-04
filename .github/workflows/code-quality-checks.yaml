@@ -1,38 +1,46 @@
-name: Execute linter, unit tests, and check its coverage.
+name: Code Quality and Tests
 on: 
   push:
-    branches: 
-      - main
     paths-ignore:
       - "**/*.md"
-  
+
 jobs:
-  quality-assurance:
+  lint-and-vet:
+    name: Lint and Vet Code
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
+    - name: Checkout code 
+      uses: actions/checkout@v4
+    - name: Setup GO
+      uses: actions/setup-go@v5
       with:
         go-version: '^1.22.0'
-
     - name: Install GO linter
       run: |
             sudo apt-get install golint
-    
-    - name: Run linter
+    - name: Run go linter
       run: |
         golint -set_exit_status ./...
 
-    - name: Run go vet
+    - name: Run go Vet
       run: |
         go vet ./...
 
-    - name: Execute unit tests
+  run-tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code 
+      uses: actions/checkout@v4
+    - name: Setup GO
+      uses: actions/setup-go@v5
+      with:
+        go-version: '^1.22.0'
+    - name: Execute Tests and Generate Coverage Report
       run: |
             go test ./... -coverprofile coverage.out -covermode count
             go tool cover -func coverage.out
-
-    - name: Quality Gate - Test coverage shall be above threshold
+    - name: Check Test Coverage Threshold
       env:
           TESTCOVERAGE_THRESHOLD: 75
       run: |

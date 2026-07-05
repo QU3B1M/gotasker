@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"text/template"
 
 	"gopkg.in/yaml.v2"
@@ -40,21 +42,36 @@ type ForEach struct {
 	ForEach  []ForEach `json:"foreach"`
 }
 
+// Import represents a workflow import declaration.
+type Import struct {
+	File string `json:"file" yaml:"file"`
+	As   string `json:"as" yaml:"as"`
+}
+
 // Workflow represents a workflow with tasks and variables.
 type Workflow struct {
 	Tasks     []Task      `json:"tasks"`
 	Variables interface{} `json:"variables"`
+	Imports   []Import    `json:"imports,omitempty" yaml:"imports,omitempty"`
 }
 
 // NewWorkflow loads a workflow from a file, processes it,
 // and returns a pointer to a Workflow struct. It can return an error
 // if there's a problem with marshalling or unmarshalling the data.
 func NewWorkflow(workflowFilePath string) (*Workflow, error) {
-	var workflow Workflow
+	var wf Workflow
 
 	workflowData, err := loadWorkflowFile(workflowFilePath)
 	if err != nil {
 		return nil, fmt.Errorf("error loading workflow: %w", err)
+	}
+
+	// Process imports if present
+	if imports, ok := workflowData["imports"]; ok {
+		err := processImports(workflowFilePath, imports, workflowData)
+		if err != nil {
+			return nil, fmt.Errorf("error processing imports: %w", err)
+		}
 	}
 
 	taskCollection, err := ProcessWorkflow(workflowData)
@@ -75,31 +92,152 @@ func NewWorkflow(workflowFilePath string) (*Workflow, error) {
 	}
 
 	// Convert the JSON to a struct
-	err = json.Unmarshal(jsonData, &workflow)
+	err = json.Unmarshal(jsonData, &wf)
 	if err != nil {
 		return nil, fmt.Errorf("error unmarshalling JSON: %w", err)
 	}
 
-	return &workflow, nil
+	return &wf, nil
 }
 
-// loadWorkflowFile reads a workflow from a file, parses it from YAML to JSON,
+// processImports loads imported workflows and merges their tasks into the main workflow.
+// Imported task names are prefixed with the namespace ("as" field) to avoid collisions.
+func processImports(mainFilePath string, importsRaw interface{}, workflowData map[string]interface{}) error {
+	importsList, ok := importsRaw.([]interface{})
+	if !ok {
+		return fmt.Errorf("imports must be a list")
+	}
+
+	mainDir := filepath.Dir(mainFilePath)
+	tasks, ok := workflowData["tasks"].([]interface{})
+	if !ok {
+		tasks = []interface{}{}
+	}
+
+	for _, imp := range importsList {
+		impMap, ok := imp.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("each import must be a map with 'file' and 'as' keys")
+		}
+
+		fileVal, ok := impMap["file"].(string)
+		if !ok || fileVal == "" {
+			return fmt.Errorf("import missing 'file' field")
+		}
+
+		namespace, ok := impMap["as"].(string)
+		if !ok || namespace == "" {
+			return fmt.Errorf("import missing 'as' field")
+		}
+
+		// Resolve import path relative to the main workflow file
+		importPath := fileVal
+		if !filepath.IsAbs(importPath) {
+			importPath = filepath.Join(mainDir, importPath)
+		}
+
+		importedData, err := loadWorkflowFile(importPath)
+		if err != nil {
+			return fmt.Errorf("error loading import %q: %w", fileVal, err)
+		}
+
+		// Merge variables from imported workflow
+		if importVars, ok := importedData["variables"].(map[string]interface{}); ok {
+			if mainVars, ok := workflowData["variables"].(map[string]interface{}); ok {
+				for k, v := range importVars {
+					// Only add if not already defined in main workflow
+					if _, exists := mainVars[k]; !exists {
+						mainVars[k] = v
+					}
+				}
+			}
+		}
+
+		// Merge tasks with namespace prefix
+		if importedTasks, ok := importedData["tasks"].([]interface{}); ok {
+			for _, task := range importedTasks {
+				taskMap, ok := task.(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				// Prefix the task name with namespace
+				if name, ok := taskMap["name"].(string); ok {
+					taskMap["name"] = namespace + "." + name
+				}
+
+				// Prefix depends-on references with namespace
+				if deps, ok := taskMap["depends-on"]; ok {
+					taskMap["depends-on"] = prefixDependencies(deps, namespace)
+				}
+
+				tasks = append(tasks, taskMap)
+			}
+		}
+	}
+
+	workflowData["tasks"] = tasks
+	return nil
+}
+
+// prefixDependencies adds a namespace prefix to dependency references
+// unless they already contain a dot (already namespaced).
+func prefixDependencies(deps interface{}, namespace string) interface{} {
+	switch d := deps.(type) {
+	case []interface{}:
+		result := make([]interface{}, len(d))
+		for i, dep := range d {
+			if s, ok := dep.(string); ok {
+				if !strings.Contains(s, ".") {
+					result[i] = namespace + "." + s
+				} else {
+					result[i] = s
+				}
+			} else {
+				result[i] = dep
+			}
+		}
+		return result
+	case []string:
+		result := make([]string, len(d))
+		for i, dep := range d {
+			if !strings.Contains(dep, ".") {
+				result[i] = namespace + "." + dep
+			} else {
+				result[i] = dep
+			}
+		}
+		return result
+	}
+	return deps
+}
+
+// loadWorkflowFile reads a workflow from a file (YAML or JSON),
 // converts all keys to strings, and returns the result as a map.
-// It can return an error if there's a problem with reading the file,
-// parsing the YAML, or converting the keys.
 func loadWorkflowFile(filePath string) (map[string]interface{}, error) {
-	json := make(map[string]interface{})
+	data := make(map[string]interface{})
 	file, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("error reading file: %w", err)
 	}
 
-	err = yaml.Unmarshal(file, &json)
-	if err != nil {
-		return nil, fmt.Errorf("error parsing YAML: %w", err)
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".json":
+		err = json.Unmarshal(file, &data)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing JSON: %w", err)
+		}
+	case ".yaml", ".yml":
+		err = yaml.Unmarshal(file, &data)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing YAML: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported file format: %s (use .yaml, .yml, or .json)", ext)
 	}
 
-	converted, ok := ConvertKeysToString(json).(map[string]interface{})
+	converted, ok := ConvertKeysToString(data).(map[string]interface{})
 	if !ok {
 		return nil, fmt.Errorf("error converting keys to string")
 	}
@@ -182,14 +320,21 @@ func ConvertKeysToString(item interface{}) interface{} {
 
 // ExpandTask expands a task with foreach loops into multiple tasks based on the variables.
 func ExpandTask(task interface{}, variables map[string]interface{}) []map[string]interface{} {
-	iterator := task.(map[string]interface{})["foreach"].([]interface{})
+	taskMap, ok := task.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	iterator, ok := taskMap["foreach"].([]interface{})
+	if !ok {
+		return nil
+	}
 	foreachMap := make([]map[string]interface{}, len(iterator))
 
 	for i, v := range iterator {
-		// Use type assertion to convert v to map[string]string
 		mapValue, ok := v.(map[string]interface{})
 		if !ok {
-			fmt.Println("Error parsing foreach field." + fmt.Sprint(v))
+			fmt.Printf("Error parsing foreach field: %v\n", v)
+			return nil
 		}
 		foreachMap[i] = mapValue
 	}
@@ -208,10 +353,25 @@ func ExpandTask(task interface{}, variables map[string]interface{}) []map[string
 	for i, name := range variableNames {
 		value, ok := variables[name]
 		if !ok {
-			fmt.Println("Error parsing variable name." + fmt.Sprint(name))
+			fmt.Printf("Error: variable %q not found\n", name)
+			return nil
 		}
-		variableValues[i] = value.([]interface{})
+		vals, ok := value.([]interface{})
+		if !ok {
+			fmt.Printf("Error: variable %q is not a list\n", name)
+			return nil
+		}
+		variableValues[i] = vals
 	}
+
+	// Clone the task map without the 'foreach' key to avoid mutating the original.
+	cleanTask := make(map[string]interface{})
+	for k, v := range taskMap {
+		if k != "foreach" {
+			cleanTask[k] = v
+		}
+	}
+
 	for _, combination := range product(variableValues) {
 		variablesWithItems := make(map[string]interface{})
 		for k, v := range variables {
@@ -220,10 +380,8 @@ func ExpandTask(task interface{}, variables map[string]interface{}) []map[string
 		for i, v := range combination {
 			variablesWithItems[asIdentifiers[i]] = v
 		}
-		// Remove the 'foreach' field from the task.
-		delete((task.(map[string]interface{})), "foreach")
 		// Replace the placeholders in the task with the actual values
-		taskToAdd := ReplacePlaceholders(task, variablesWithItems).(map[string]interface{})
+		taskToAdd := ReplacePlaceholders(cleanTask, variablesWithItems).(map[string]interface{})
 		newTasks = append(newTasks, taskToAdd)
 	}
 	return newTasks
@@ -258,16 +416,16 @@ func ReplacePlaceholders(item interface{}, variables map[string]interface{}) int
 		return i2
 	case string:
 		temp := template.New("workflow")
-		temp, err := temp.Parse(item.(string))
+		temp, err := temp.Parse(x)
 		if err != nil {
-			fmt.Println("Error parsing template:", err)
-			os.Exit(1)
+			fmt.Printf("Error parsing template %q: %v\n", x, err)
+			return x
 		}
 		buf := &bytes.Buffer{}
 		err = temp.Execute(buf, variables)
 		if err != nil {
-			fmt.Println("Error executing template:", err)
-			os.Exit(1)
+			fmt.Printf("Error executing template %q: %v\n", x, err)
+			return x
 		}
 		return buf.String()
 	}

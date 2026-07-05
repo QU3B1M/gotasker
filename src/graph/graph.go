@@ -52,6 +52,12 @@ func (g *DependencyGraph) DependOn(child, parent string) error {
 	return nil
 }
 
+// AddNode adds a node to the graph without any dependency relationships.
+// This is useful for tasks that have no dependencies and no dependents.
+func (g *DependencyGraph) AddNode(node string) {
+	g.nodes[node] = struct{}{}
+}
+
 // DependsOn checks if 'child' depends on 'parent'.
 func (g *DependencyGraph) DependsOn(child, parent string) bool {
 	deps := g.Dependencies(child)

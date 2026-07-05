@@ -144,60 +144,147 @@ func TestCancelTask(t *testing.T) {
 	}
 }
 
-// func TestCancelDependentTasks(t *testing.T) {
-// 	taskCollection := []map[string]interface{}{
-// 		{
-// 			"task":       "a",
-// 			"depends-on": []string{"b"},
-// 		},
-// 		{
-// 			"task":       "b",
-// 			"depends-on": []string{},
-// 		},
-// 		{
-// 			"task":       "c",
-// 			"depends-on": []string{"a"},
-// 		},
-// 	}
-// 	d := dag.NewDAG(taskCollection, false)
-// 	d.CancelDependentTasks("a", "all")
-// 	tasksToCancel := d.GetTasksToCancel()
-// 	if _, ok := tasksToCancel["a"]; !ok {
-// 		t.Error("CancelDependentTasks did not set the task to cancel")
-// 	}
-// 	if _, ok := tasksToCancel["c"]; !ok {
-// 		t.Error("CancelDependentTasks did not set the dependent task to cancel")
-// 	}
-// }
+func TestCancelDependentTasksAbortAll(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{"b"},
+		},
+		{
+			"task":       "b",
+			"depends-on": []string{},
+		},
+		{
+			"task":       "c",
+			"depends-on": []string{"a"},
+		},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	d.CancelDependentTasks("a", "abort-all")
+	tasksToCancel := d.GetTasksToCancel()
+	// abort-all should cancel all tasks in all execution plan entries
+	if len(tasksToCancel) == 0 {
+		t.Error("CancelDependentTasks abort-all did not cancel any tasks")
+	}
+}
 
-//  Test GetDependencyTree
+func TestCancelDependentTasksAbortRelated(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{"b"},
+		},
+		{
+			"task":       "b",
+			"depends-on": []string{},
+		},
+		{
+			"task":       "c",
+			"depends-on": []string{"a"},
+		},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	d.SetStatus("b", "successful")
+	d.CancelDependentTasks("a", "abort-related-flows")
+	tasksToCancel := d.GetTasksToCancel()
+	// Should have canceled tasks related to "a" that aren't already finished
+	if len(tasksToCancel) == 0 {
+		t.Error("CancelDependentTasks abort-related-flows did not cancel any tasks")
+	}
+}
 
-// func TestGetDependencyTree(t *testing.T) {
-// 	taskCollection := []map[string]interface{}{
-// 		{
-// 			"task":       "a",
-// 			"depends-on": []string{"b"},
-// 		},
-// 		{
-// 			"task":       "b",
-// 			"depends-on": []string{},
-// 		},
-// 		{
-// 			"task":       "c",
-// 			"depends-on": []string{"a"},
-// 		},
-// 	}
-// 	expected := map[string][]string{
-// 		"a": {"b"},
-// 		"b": {},
-// 		"c": {"a"},
-// 	}
-// 	d := dag.NewDAG(taskCollection, false)
-// 	dependencyTree := d.GetDependencyTree()
-// 	if !reflect.DeepEqual(dependencyTree, expected) {
-// 		t.Errorf("GetDependencyTree returned: %v, expected: %v", dependencyTree, expected)
-// 	}
-// }
+func TestCancelDependentTasksContinue(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{"b"},
+		},
+		{
+			"task":       "b",
+			"depends-on": []string{},
+		},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	d.CancelDependentTasks("a", "continue")
+	tasksToCancel := d.GetTasksToCancel()
+	if len(tasksToCancel) != 0 {
+		t.Error("CancelDependentTasks with continue policy should not cancel tasks")
+	}
+}
+
+func TestGetDependencyTree(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{"b"},
+		},
+		{
+			"task":       "b",
+			"depends-on": []string{},
+		},
+		{
+			"task":       "c",
+			"depends-on": []string{"a"},
+		},
+	}
+	expected := map[string][]string{
+		"a": {"b"},
+		"b": {},
+		"c": {"a"},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	dependencyTree := d.GetDependencyTree()
+	if !reflect.DeepEqual(dependencyTree, expected) {
+		t.Errorf("GetDependencyTree returned: %v, expected: %v", dependencyTree, expected)
+	}
+}
+
+func TestGetTopSortedLayers(t *testing.T) {
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []string{"b"},
+		},
+		{
+			"task":       "b",
+			"depends-on": []string{},
+		},
+		{
+			"task":       "c",
+			"depends-on": []string{"a"},
+		},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	layers := d.GetTopSortedLayers()
+	if len(layers) != 3 {
+		t.Errorf("Expected 3 layers, got %d: %v", len(layers), layers)
+	}
+	if layers[0][0] != "b" {
+		t.Errorf("First layer should be [b], got %v", layers[0])
+	}
+}
+
+func TestDAGWithInterfaceDependencies(t *testing.T) {
+	// Simulate what happens when deps come from JSON unmarshal ([]interface{} not []string)
+	taskCollection := []map[string]interface{}{
+		{
+			"task":       "a",
+			"depends-on": []interface{}{"b"},
+		},
+		{
+			"task":       "b",
+			"depends-on": []interface{}{},
+		},
+	}
+	d := dag.NewDAG(taskCollection, false)
+	if d == nil {
+		t.Error("NewDAG returned nil for []interface{} deps")
+	}
+	available := d.GetAvailableTasks()
+	if len(available) != 2 {
+		t.Errorf("Expected 2 available tasks, got %d", len(available))
+	}
+}
 
 // GetExecutionPlan
 

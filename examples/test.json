@@ -1,0 +1,28 @@
+{
+  "name": "test workflow",
+  "description": "Test",
+  "variables": {
+    "name": "test",
+    "names": ["Pepe", "Juan"],
+    "city": "New York"
+  },
+  "tasks": [
+    {
+      "name": "test-{{.name}}",
+      "description": "Example task.",
+      "do": {
+        "this": "process",
+        "with": {
+          "path": "echo",
+          "args": ["Hello {{.name}} from {{.city}}!"]
+        }
+      },
+      "foreach": [
+        {
+          "variable": "names",
+          "as": "name"
+        }
+      ]
+    }
+  ]
+}

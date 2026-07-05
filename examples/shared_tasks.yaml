@@ -1,0 +1,23 @@
+name: shared tasks
+description: Shared logging tasks
+variables:
+  log_level: "info"
+tasks:
+  - name: "setup-logger"
+    description: "Initialize the logger"
+    do:
+      this: process
+      with:
+        path: echo
+        args:
+          - "Logger initialized with level {{.log_level}}"
+  - name: "log-complete"
+    description: "Log completion"
+    depends-on:
+      - "setup-logger"
+    do:
+      this: process
+      with:
+        path: echo
+        args:
+          - "Logging complete"

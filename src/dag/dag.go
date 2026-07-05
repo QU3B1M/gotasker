@@ -2,7 +2,11 @@
 // from a given task collection.
 package dag
 
-import "gotasker/src/graph"
+import (
+	"fmt"
+	"gotasker/src/graph"
+	"sync"
+)
 
 // DAG represents a directed acyclic graph with tasks and their dependencies.
 type DAG struct {
@@ -13,6 +17,7 @@ type DAG struct {
 	toBeCanceled        map[string]struct{}
 	finishedTasksStatus map[string]map[string]struct{}
 	executionPlan       map[string]interface{}
+	mu                  sync.RWMutex
 }
 
 // NewDAG creates a new DAG instance with the given task collection.
@@ -48,13 +53,23 @@ func (d *DAG) GetExecutionPlan() map[string]interface{} {
 	return d.executionPlan
 }
 
+// GetTopSortedLayers returns tasks grouped in layers for parallel execution.
+// Each layer contains tasks that can be run concurrently.
+func (d *DAG) GetTopSortedLayers() [][]string {
+	return d.graph.TopSortedLayers()
+}
+
 // SetStatus sets the status of a given task.
 func (d *DAG) SetStatus(taskName string, status string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.finishedTasksStatus[status][taskName] = struct{}{}
 }
 
 // GetStatus returns the status of a given task.
 func (d *DAG) GetStatus(taskName string) string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
 	if _, ok := d.finishedTasksStatus["successful"][taskName]; ok {
 		return "successful"
 	} else if _, ok := d.finishedTasksStatus["failed"][taskName]; ok {
@@ -67,7 +82,18 @@ func (d *DAG) GetStatus(taskName string) string {
 
 // CancelTask marks a task for cancellation if it is still pending.
 func (d *DAG) CancelTask(taskName string) bool {
-	if d.GetStatus(taskName) == "pending" {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	// Check status without lock (we already hold it)
+	pending := true
+	if _, ok := d.finishedTasksStatus["successful"][taskName]; ok {
+		pending = false
+	} else if _, ok := d.finishedTasksStatus["failed"][taskName]; ok {
+		pending = false
+	} else if _, ok := d.finishedTasksStatus["canceled"][taskName]; ok {
+		pending = false
+	}
+	if pending {
 		d.toBeCanceled[taskName] = struct{}{}
 		return true
 	}
@@ -76,34 +102,68 @@ func (d *DAG) CancelTask(taskName string) bool {
 
 // CancelDependentTasks cancels tasks dependent on the given task based on the cancel policy.
 func (d *DAG) CancelDependentTasks(taskName string, cancelPolicy string) {
-	d.cancelDependantTasks(taskName, cancelPolicy)
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.cancelDependantTasksLocked(taskName, cancelPolicy)
 }
 
 // GetTasksToCancel returns the tasks that are marked to be canceled.
 func (d *DAG) GetTasksToCancel() map[string]struct{} {
-	return d.toBeCanceled
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	// Return a copy to avoid races
+	result := make(map[string]struct{})
+	for k, v := range d.toBeCanceled {
+		result[k] = v
+	}
+	return result
 }
 
 // buildDAG constructs the dependency graph and dependency tree from the task collection.
 func (d *DAG) buildDAG() (*graph.DependencyGraph, map[string][]string) {
 	dependencyDict := make(map[string][]string)
-	graph := graph.NewGraph()
+	g := graph.NewGraph()
 	for _, task := range d.taskCollection {
-		taskName := task["task"].(string)
-		dependencies, ok := task["depends-on"].([]string)
+		taskName, ok := task["task"].(string)
 		if !ok {
-			dependencies = []string{}
-		}
-		for _, dependency := range dependencies {
-			if d.reverse {
-				graph.DependOn(dependency, taskName)
+			if name, ok := task["name"].(string); ok {
+				taskName = name
 			} else {
-				graph.DependOn(taskName, dependency)
+				continue
 			}
 		}
+
+		// Handle depends-on: could be []string or []interface{} depending on source
+		var dependencies []string
+		switch deps := task["depends-on"].(type) {
+		case []string:
+			dependencies = deps
+		case []interface{}:
+			for _, dep := range deps {
+				if s, ok := dep.(string); ok {
+					dependencies = append(dependencies, s)
+				}
+			}
+		default:
+			dependencies = []string{}
+		}
+
+		for _, dependency := range dependencies {
+			var err error
+			if d.reverse {
+				err = g.DependOn(dependency, taskName)
+			} else {
+				err = g.DependOn(taskName, dependency)
+			}
+			if err != nil {
+				fmt.Printf("Warning: could not add dependency %s -> %s: %v\n", taskName, dependency, err)
+			}
+		}
+		// Ensure standalone tasks (no dependencies) are still in the graph
+		g.AddNode(taskName)
 		dependencyDict[taskName] = dependencies
 	}
-	return graph, dependencyDict
+	return g, dependencyDict
 }
 
 // getAllTaskSet returns a set of all tasks from the given map.
@@ -115,8 +175,9 @@ func getAllTaskSet(tasks map[string]struct{}) map[string]struct{} {
 	return taskSet
 }
 
-// cancelDependantTasks cancels dependent tasks based on the given cancel policy.
-func (d *DAG) cancelDependantTasks(taskName string, cancelPolicy string) {
+// cancelDependantTasksLocked cancels dependent tasks based on the given cancel policy.
+// Must be called with d.mu held.
+func (d *DAG) cancelDependantTasksLocked(taskName string, cancelPolicy string) {
 	if cancelPolicy == "continue" {
 		return
 	}
@@ -127,20 +188,40 @@ func (d *DAG) cancelDependantTasks(taskName string, cancelPolicy string) {
 	for k, v := range d.finishedTasksStatus["successful"] {
 		notCancelledTasks[k] = v
 	}
-	for _, tasks := range d.executionPlan {
-		taskSet := getAllTaskSet(tasks.(map[string]struct{}))
-		if cancelPolicy == "abort-all" {
-			for k := range taskSet {
-				d.toBeCanceled[k] = struct{}{}
-			}
-		} else if cancelPolicy == "abort-related-flows" {
-			if _, ok := taskSet[taskName]; ok {
-				for k := range taskSet {
-					if _, ok := notCancelledTasks[k]; !ok {
+
+	if cancelPolicy == "abort-all" {
+		// Cancel every task in the execution plan
+		for rootTask, subtree := range d.executionPlan {
+			d.toBeCanceled[rootTask] = struct{}{}
+			collectTaskNames(subtree, d.toBeCanceled)
+		}
+	} else if cancelPolicy == "abort-related-flows" {
+		// Cancel the root task and its subtree if the failed task is part of it
+		for rootTask, subtree := range d.executionPlan {
+			allTasks := map[string]struct{}{rootTask: {}}
+			collectTaskNames(subtree, allTasks)
+			if _, ok := allTasks[taskName]; ok {
+				for k := range allTasks {
+					if _, done := notCancelledTasks[k]; !done {
 						d.toBeCanceled[k] = struct{}{}
 					}
 				}
 			}
+		}
+	}
+}
+
+// collectTaskNames recursively collects all task names from an execution plan subtree.
+func collectTaskNames(tree interface{}, out map[string]struct{}) {
+	switch t := tree.(type) {
+	case map[string]interface{}:
+		for k, v := range t {
+			out[k] = struct{}{}
+			collectTaskNames(v, out)
+		}
+	case map[string]struct{}:
+		for k := range t {
+			out[k] = struct{}{}
 		}
 	}
 }

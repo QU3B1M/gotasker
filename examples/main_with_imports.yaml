@@ -1,0 +1,26 @@
+name: main workflow with imports
+description: Tests reusable workflow imports
+imports:
+  - file: shared_tasks.yaml
+    as: logging
+variables:
+  greeting: "world"
+tasks:
+  - name: "greet"
+    description: "Say hello"
+    do:
+      this: process
+      with:
+        path: echo
+        args:
+          - "Hello {{.greeting}}!"
+  - name: "after-logging"
+    description: "Runs after imported logging tasks"
+    depends-on:
+      - "logging.log-complete"
+    do:
+      this: process
+      with:
+        path: echo
+        args:
+          - "All logging done, proceeding"
